@@ -147,7 +147,7 @@ fn generate_geyser_plugin_config() -> (TempDir, PathBuf) {
     let lib_path = lib_path.as_os_str().to_str().unwrap();
     let config_content = json!({
         "libpath": lib_path,
-        "connection_str": "host=localhost user=solana password=solana port=5432",
+        "connection_str": "host=localhost user=postgres password=postgres port=5432",
         "threads": 20,
         "batch_size": 20,
         "panic_on_db_errors": true,
@@ -280,7 +280,7 @@ fn test_postgres_plugin() {
 
     let result = SimplePostgresClient::connect_to_db(&plugin_config);
     if result.is_err() {
-        info!("Failed to connecto the PostgreSQL database. Please setup the database to run the integration tests. {:?}", result.err());
+        info!("Failed to connect to the PostgreSQL database. Please setup the database to run the integration tests. {:?}", result.err());
         return;
     }
 
