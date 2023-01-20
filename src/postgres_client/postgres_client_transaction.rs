@@ -10,7 +10,7 @@ use {
     postgres::{Client, Statement},
     postgres_types::{FromSql, ToSql},
     solana_geyser_plugin_interface::geyser_plugin_interface::{
-        GeyserPluginError, ReplicaTransactionInfoV2,
+        GeyserPluginError, ReplicaTransactionInfo,
     },
     solana_runtime::bank::RewardType,
     solana_sdk::{
@@ -488,7 +488,7 @@ impl From<&TransactionStatusMeta> for DbTransactionStatusMeta {
 
 fn build_db_transaction(
     slot: u64,
-    transaction_info: &ReplicaTransactionInfoV2,
+    transaction_info: &ReplicaTransactionInfo,
     transaction_write_version: u64,
 ) -> DbTransaction {
     DbTransaction {
@@ -522,7 +522,7 @@ fn build_db_transaction(
             .to_vec(),
         meta: DbTransactionStatusMeta::from(transaction_info.transaction_status_meta),
         write_version: transaction_write_version as i64,
-        index: transaction_info.index as i64,
+        index: 0,
     }
 }
 
@@ -604,7 +604,7 @@ impl SimplePostgresClient {
 impl ParallelPostgresClient {
     fn build_transaction_request(
         slot: u64,
-        transaction_info: &ReplicaTransactionInfoV2,
+        transaction_info: &ReplicaTransactionInfo,
         transaction_write_version: u64,
     ) -> LogTransactionRequest {
         LogTransactionRequest {
@@ -618,7 +618,7 @@ impl ParallelPostgresClient {
 
     pub fn log_transaction_info(
         &mut self,
-        transaction_info: &ReplicaTransactionInfoV2,
+        transaction_info: &ReplicaTransactionInfo,
         slot: u64,
     ) -> Result<(), GeyserPluginError> {
         self.transaction_write_version
@@ -1081,8 +1081,6 @@ pub(crate) mod tests {
                 writable: vec![Pubkey::new_unique(), Pubkey::new_unique()],
                 readonly: vec![Pubkey::new_unique(), Pubkey::new_unique()],
             },
-            return_data: None,
-            compute_units_consumed: None,
         }
     }
 
@@ -1299,7 +1297,7 @@ pub(crate) mod tests {
 
     fn check_transaction(
         slot: u64,
-        transaction: &ReplicaTransactionInfoV2,
+        transaction: &ReplicaTransactionInfo,
         db_transaction: &DbTransaction,
     ) {
         assert_eq!(transaction.signature.as_ref(), db_transaction.signature);
@@ -1368,12 +1366,11 @@ pub(crate) mod tests {
         .unwrap();
 
         let transaction_status_meta = build_transaction_status_meta();
-        let transaction_info = ReplicaTransactionInfoV2 {
+        let transaction_info = ReplicaTransactionInfo {
             signature: &signature,
             is_vote: false,
             transaction: &transaction,
             transaction_status_meta: &transaction_status_meta,
-            index: 0,
         };
 
         let slot = 54;
@@ -1414,12 +1411,11 @@ pub(crate) mod tests {
         .unwrap();
 
         let transaction_status_meta = build_transaction_status_meta();
-        let transaction_info = ReplicaTransactionInfoV2 {
+        let transaction_info = ReplicaTransactionInfo {
             signature: &signature,
             is_vote: true,
             transaction: &transaction,
             transaction_status_meta: &transaction_status_meta,
-            index: 0,
         };
 
         let slot = 54;

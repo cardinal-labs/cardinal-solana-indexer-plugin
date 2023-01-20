@@ -231,12 +231,12 @@ impl GeyserPlugin for GeyserPluginPostgres {
 
         let mut measure_all = Measure::start("geyser-plugin-postgres-update-account-main");
         match account {
-            ReplicaAccountInfoVersions::V0_0_1(_) => {
-                return Err(GeyserPluginError::Custom(Box::new(
-                    GeyserPluginPostgresError::ReplicaAccountV001NotSupported,
-                )));
-            }
-            ReplicaAccountInfoVersions::V0_0_2(account) => {
+            // ReplicaAccountInfoVersions::V0_0_1(_) => {
+            //     return Err(GeyserPluginError::Custom(Box::new(
+            //         GeyserPluginPostgresError::ReplicaAccountV001NotSupported,
+            //     )));
+            // }
+            ReplicaAccountInfoVersions::V0_0_1(account) => {
                 let mut measure_select =
                     Measure::start("geyser-plugin-postgres-update-account-select");
                 if let Some(accounts_selector) = &self.accounts_selector {
@@ -373,7 +373,7 @@ impl GeyserPlugin for GeyserPluginPostgres {
                 )));
             }
             Some(client) => match transaction_info {
-                ReplicaTransactionInfoVersions::V0_0_2(transaction_info) => {
+                ReplicaTransactionInfoVersions::V0_0_1(transaction_info) => {
                     if let Some(transaction_selector) = &self.transaction_selector {
                         if !transaction_selector.is_transaction_selected(
                             transaction_info.is_vote,
@@ -392,11 +392,6 @@ impl GeyserPlugin for GeyserPluginPostgres {
                                 msg: format!("Failed to persist the transaction info to the PostgreSQL database. Error: {:?}", err)
                             });
                     }
-                }
-                _ => {
-                    return Err(GeyserPluginError::SlotStatusUpdateError{
-                        msg: "Failed to persist the transaction info to the PostgreSQL database. Unsupported format.".to_string()
-                    });
                 }
             },
         }
