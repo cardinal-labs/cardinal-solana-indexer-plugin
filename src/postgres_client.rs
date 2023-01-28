@@ -896,7 +896,7 @@ pub struct ParallelPostgresClient {
 
 impl ParallelPostgresClient {
     pub fn new(config: &GeyserPluginPostgresConfig) -> Result<Self, GeyserPluginError> {
-        info!("Creating ParallelPostgresClient...");
+        info!("[ParallelPostgresClient]");
         let (sender, receiver) = bounded(MAX_ASYNC_REQUESTS);
         let exit_worker = Arc::new(AtomicBool::new(false));
         let mut workers = Vec::default();
@@ -915,9 +915,7 @@ impl ParallelPostgresClient {
                 .name(format!("worker-{}", i))
                 .spawn(move || -> Result<(), GeyserPluginError> {
                     let panic_on_db_errors = *config.panic_on_db_errors.as_ref().unwrap_or(&DEFAULT_PANIC_ON_DB_ERROR);
-                    let result = PostgresClientWorker::new(config);
-
-                    match result {
+                    match PostgresClientWorker::new(config) {
                         Ok(mut worker) => {
                             initialized_worker_count_clone.fetch_add(1, Ordering::Relaxed);
                             worker.do_work(cloned_receiver, exit_clone, is_startup_done_clone, startup_done_count_clone, panic_on_db_errors)?;
@@ -937,7 +935,6 @@ impl ParallelPostgresClient {
             workers.push(worker);
         }
 
-        info!("Created ParallelPostgresClient.");
         Ok(Self {
             last_report: AtomicInterval::default(),
             workers,
@@ -968,10 +965,10 @@ impl ParallelPostgresClient {
     }
 
     pub fn update_account(&mut self, account: &ReplicaAccountInfo, slot: u64, is_startup: bool) -> Result<(), GeyserPluginError> {
-        // if !is_startup && account.txn_signature().is_none() {
-        //     // we are not interested in accountsdb internal bookeeping updates
-        //     return Ok(());
-        // }
+        if !is_startup && account.txn_signature().is_none() {
+            // we are not interested in accountsdb internal bookeeping updates
+            return Ok(());
+        }
 
         if self.last_report.should_update(30000) {
             datapoint_debug!("postgres-plugin-stats", ("message-queue-length", self.sender.len() as i64, i64),);
@@ -1021,7 +1018,7 @@ impl ParallelPostgresClient {
     }
 
     pub fn notify_end_of_startup(&mut self) -> Result<(), GeyserPluginError> {
-        info!("Notifying the end of startup");
+        info!("[notify_end_of_startup]");
         // Ensure all items in the queue has been received by the workers
         while !self.sender.is_empty() {
             sleep(Duration::from_millis(100));
@@ -1031,14 +1028,12 @@ impl ParallelPostgresClient {
         // Wait for all worker threads to be done with flushing
         while self.startup_done_count.load(Ordering::Relaxed) != self.initialized_worker_count.load(Ordering::Relaxed) {
             info!(
-                "Startup done count: {}, good worker thread count: {}",
+                "[notify_end_of_startup] {}/{}",
                 self.startup_done_count.load(Ordering::Relaxed),
                 self.initialized_worker_count.load(Ordering::Relaxed)
             );
             sleep(Duration::from_millis(100));
         }
-
-        info!("Done with notifying the end of startup");
         Ok(())
     }
 }
