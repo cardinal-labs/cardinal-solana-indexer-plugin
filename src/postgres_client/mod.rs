@@ -24,7 +24,7 @@ use solana_measure::measure::Measure;
 use solana_metrics::*;
 use std::collections::HashSet;
 use std::sync::Mutex;
-use std::thread::{self};
+use std::thread;
 
 pub use self::postgres_client_account_index::DbAccountInfo;
 pub use self::postgres_client_account_index::ReadableAccountInfo;
@@ -32,10 +32,6 @@ pub use self::postgres_client_block_metadata::DbBlockInfo;
 use self::postgres_client_token_account_index::TokenSecondaryIndexEntry;
 pub use self::postgres_client_transaction::build_db_transaction;
 pub use self::postgres_client_transaction::DbTransaction;
-
-/// The maximum asynchronous requests allowed in the channel to avoid excessive
-/// memory usage. The downside -- calls after this threshold is reached can get blocked.
-const SAFE_BATCH_STARTING_SLOT_CUSHION: u64 = 2 * 40960;
 
 struct PostgresSqlClientWrapper {
     client: Client,
@@ -322,7 +318,7 @@ impl PostgresClientBuilder {
 
                 // database if populated concurrently so we need to move some number of slots
                 // below highest available slot to make sure we do not skip anything that was already in DB.
-                let batch_slot_bound = on_load_client.get_highest_available_slot()?.saturating_sub(SAFE_BATCH_STARTING_SLOT_CUSHION);
+                let batch_slot_bound = on_load_client.get_highest_available_slot()?.saturating_sub(config.safe_batch_starting_slot_cushion);
                 info!("Set batch_optimize_by_skiping_older_slots to {}", batch_slot_bound);
                 Some(batch_slot_bound)
             }

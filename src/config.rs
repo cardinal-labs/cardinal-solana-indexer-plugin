@@ -126,6 +126,10 @@ pub struct GeyserPluginPostgresConfig {
     /// Controls if this plugin can read the database on_load() to find heighest slot
     /// and ignore upsert accounts (at_startup) that should already exist in DB
     pub skip_upsert_existing_accounts_at_startup: bool,
+
+    /// The maximum asynchronous requests allowed in the channel to avoid excessive
+    /// memory usage. The downside -- calls after this threshold is reached can get blocked.
+    pub safe_batch_starting_slot_cushion: u64,
 }
 
 impl Default for GeyserPluginPostgresConfig {
@@ -148,6 +152,7 @@ impl Default for GeyserPluginPostgresConfig {
             index_token_owner: None,
             index_token_mint: None,
             skip_upsert_existing_accounts_at_startup: false,
+            safe_batch_starting_slot_cushion: 2 * 40960,
         }
     }
 }
