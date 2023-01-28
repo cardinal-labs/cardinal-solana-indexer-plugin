@@ -1,7 +1,8 @@
-/// The transaction selector is responsible for filtering transactions
-/// in the plugin framework.
-use {log::*, solana_sdk::pubkey::Pubkey, std::collections::HashSet};
+use log::*;
+use solana_sdk::pubkey::Pubkey;
+use std::collections::HashSet;
 
+#[derive(Default, Debug)]
 pub(crate) struct TransactionSelector {
     pub mentioned_addresses: HashSet<Vec<u8>>,
     pub select_all_transactions: bool,
@@ -10,27 +11,14 @@ pub(crate) struct TransactionSelector {
 
 #[allow(dead_code)]
 impl TransactionSelector {
-    pub fn default() -> Self {
-        Self {
-            mentioned_addresses: HashSet::default(),
-            select_all_transactions: false,
-            select_all_vote_transactions: false,
-        }
-    }
-
     /// Create a selector based on the mentioned addresses
     /// To select all transactions use ["*"] or ["all"]
     /// To select all vote transactions, use ["all_votes"]
     /// To select transactions mentioning specific addresses use ["<pubkey1>", "<pubkey2>", ...]
     pub fn new(mentioned_addresses: &[String]) -> Self {
-        info!(
-            "Creating TransactionSelector from addresses: {:?}",
-            mentioned_addresses
-        );
+        info!("Creating TransactionSelector from addresses: {:?}", mentioned_addresses);
 
-        let select_all_transactions = mentioned_addresses
-            .iter()
-            .any(|key| key == "*" || key == "all");
+        let select_all_transactions = mentioned_addresses.iter().any(|key| key == "*" || key == "all");
         if select_all_transactions {
             return Self {
                 mentioned_addresses: HashSet::default(),
@@ -47,10 +35,7 @@ impl TransactionSelector {
             };
         }
 
-        let mentioned_addresses = mentioned_addresses
-            .iter()
-            .map(|key| bs58::decode(key).into_vec().unwrap())
-            .collect();
+        let mentioned_addresses = mentioned_addresses.iter().map(|key| bs58::decode(key).into_vec().unwrap()).collect();
 
         Self {
             mentioned_addresses,
@@ -60,11 +45,7 @@ impl TransactionSelector {
     }
 
     /// Check if a transaction is of interest.
-    pub fn is_transaction_selected(
-        &self,
-        is_vote: bool,
-        mentioned_addresses: Box<dyn Iterator<Item = &Pubkey> + '_>,
-    ) -> bool {
+    pub fn is_transaction_selected(&self, is_vote: bool, mentioned_addresses: Box<dyn Iterator<Item = &Pubkey> + '_>) -> bool {
         if !self.is_enabled() {
             return false;
         }
@@ -82,9 +63,7 @@ impl TransactionSelector {
 
     /// Check if any transaction is of interest at all
     pub fn is_enabled(&self) -> bool {
-        self.select_all_transactions
-            || self.select_all_vote_transactions
-            || !self.mentioned_addresses.is_empty()
+        self.select_all_transactions || self.select_all_vote_transactions || !self.mentioned_addresses.is_empty()
     }
 }
 

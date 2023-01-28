@@ -1,31 +1,30 @@
-/// Module responsible for handling persisting transaction data to the PostgreSQL
-/// database.
-use {
-    crate::{
-        geyser_plugin_postgres::{GeyserPluginPostgresConfig, GeyserPluginPostgresError},
-        postgres_client::{DbWorkItem, ParallelPostgresClient, SimplePostgresClient},
-    },
-    chrono::Utc,
-    log::*,
-    postgres::{Client, Statement},
-    postgres_types::{FromSql, ToSql},
-    solana_geyser_plugin_interface::geyser_plugin_interface::{
-        GeyserPluginError, ReplicaTransactionInfo,
-    },
-    solana_runtime::bank::RewardType,
-    solana_sdk::{
-        instruction::CompiledInstruction,
-        message::{
-            v0::{self, LoadedAddresses, MessageAddressTableLookup},
-            Message, MessageHeader, SanitizedMessage,
-        },
-        transaction::TransactionError,
-    },
-    solana_transaction_status::{
-        InnerInstructions, Reward, TransactionStatusMeta, TransactionTokenBalance,
-    },
-    std::sync::atomic::Ordering,
-};
+use crate::geyser_plugin_postgres::GeyserPluginPostgresConfig;
+use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
+use crate::postgres_client::DbWorkItem;
+use crate::postgres_client::ParallelPostgresClient;
+use crate::postgres_client::SimplePostgresClient;
+use chrono::Utc;
+use log::*;
+use postgres::Client;
+use postgres::Statement;
+use postgres_types::FromSql;
+use postgres_types::ToSql;
+use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
+use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaTransactionInfo;
+use solana_runtime::bank::RewardType;
+use solana_sdk::instruction::CompiledInstruction;
+use solana_sdk::message::v0::LoadedAddresses;
+use solana_sdk::message::v0::MessageAddressTableLookup;
+use solana_sdk::message::v0::{self};
+use solana_sdk::message::Message;
+use solana_sdk::message::MessageHeader;
+use solana_sdk::message::SanitizedMessage;
+use solana_sdk::transaction::TransactionError;
+use solana_transaction_status::InnerInstructions;
+use solana_transaction_status::Reward;
+use solana_transaction_status::TransactionStatusMeta;
+use solana_transaction_status::TransactionTokenBalance;
+use std::sync::atomic::Ordering;
 
 const MAX_TRANSACTION_STATUS_LEN: usize = 256;
 
@@ -160,16 +159,8 @@ impl From<&MessageAddressTableLookup> for DbTransactionMessageAddressTableLookup
     fn from(address_table_lookup: &MessageAddressTableLookup) -> Self {
         Self {
             account_key: address_table_lookup.account_key.as_ref().to_vec(),
-            writable_indexes: address_table_lookup
-                .writable_indexes
-                .iter()
-                .map(|idx| *idx as i16)
-                .collect(),
-            readonly_indexes: address_table_lookup
-                .readonly_indexes
-                .iter()
-                .map(|idx| *idx as i16)
-                .collect(),
+            writable_indexes: address_table_lookup.writable_indexes.iter().map(|idx| *idx as i16).collect(),
+            readonly_indexes: address_table_lookup.readonly_indexes.iter().map(|idx| *idx as i16).collect(),
         }
     }
 }
@@ -177,16 +168,8 @@ impl From<&MessageAddressTableLookup> for DbTransactionMessageAddressTableLookup
 impl From<&LoadedAddresses> for DbLoadedAddresses {
     fn from(loaded_addresses: &LoadedAddresses) -> Self {
         Self {
-            writable: loaded_addresses
-                .writable
-                .iter()
-                .map(|pubkey| pubkey.as_ref().to_vec())
-                .collect(),
-            readonly: loaded_addresses
-                .readonly
-                .iter()
-                .map(|pubkey| pubkey.as_ref().to_vec())
-                .collect(),
+            writable: loaded_addresses.writable.iter().map(|pubkey| pubkey.as_ref().to_vec()).collect(),
+            readonly: loaded_addresses.readonly.iter().map(|pubkey| pubkey.as_ref().to_vec()).collect(),
         }
     }
 }
@@ -205,11 +188,7 @@ impl From<&CompiledInstruction> for DbCompiledInstruction {
     fn from(instruction: &CompiledInstruction) -> Self {
         Self {
             program_id_index: instruction.program_id_index as i16,
-            accounts: instruction
-                .accounts
-                .iter()
-                .map(|account_idx| *account_idx as i16)
-                .collect(),
+            accounts: instruction.accounts.iter().map(|account_idx| *account_idx as i16).collect(),
             data: instruction.data.clone(),
         }
     }
@@ -219,17 +198,9 @@ impl From<&Message> for DbTransactionMessage {
     fn from(message: &Message) -> Self {
         Self {
             header: DbTransactionMessageHeader::from(&message.header),
-            account_keys: message
-                .account_keys
-                .iter()
-                .map(|key| key.as_ref().to_vec())
-                .collect(),
+            account_keys: message.account_keys.iter().map(|key| key.as_ref().to_vec()).collect(),
             recent_blockhash: message.recent_blockhash.as_ref().to_vec(),
-            instructions: message
-                .instructions
-                .iter()
-                .map(DbCompiledInstruction::from)
-                .collect(),
+            instructions: message.instructions.iter().map(DbCompiledInstruction::from).collect(),
         }
     }
 }
@@ -238,22 +209,10 @@ impl From<&v0::Message> for DbTransactionMessageV0 {
     fn from(message: &v0::Message) -> Self {
         Self {
             header: DbTransactionMessageHeader::from(&message.header),
-            account_keys: message
-                .account_keys
-                .iter()
-                .map(|key| key.as_ref().to_vec())
-                .collect(),
+            account_keys: message.account_keys.iter().map(|key| key.as_ref().to_vec()).collect(),
             recent_blockhash: message.recent_blockhash.as_ref().to_vec(),
-            instructions: message
-                .instructions
-                .iter()
-                .map(DbCompiledInstruction::from)
-                .collect(),
-            address_table_lookups: message
-                .address_table_lookups
-                .iter()
-                .map(DbTransactionMessageAddressTableLookup::from)
-                .collect(),
+            instructions: message.instructions.iter().map(DbCompiledInstruction::from).collect(),
+            address_table_lookups: message.address_table_lookups.iter().map(DbTransactionMessageAddressTableLookup::from).collect(),
         }
     }
 }
@@ -262,9 +221,7 @@ impl<'a> From<&v0::LoadedMessage<'a>> for DbLoadedMessageV0 {
     fn from(message: &v0::LoadedMessage) -> Self {
         Self {
             message: DbTransactionMessageV0::from(&message.message as &v0::Message),
-            loaded_addresses: DbLoadedAddresses::from(
-                &message.loaded_addresses as &LoadedAddresses,
-            ),
+            loaded_addresses: DbLoadedAddresses::from(&message.loaded_addresses as &LoadedAddresses),
         }
     }
 }
@@ -273,11 +230,7 @@ impl From<&InnerInstructions> for DbInnerInstructions {
     fn from(instructions: &InnerInstructions) -> Self {
         Self {
             index: instructions.index as i16,
-            instructions: instructions
-                .instructions
-                .iter()
-                .map(DbCompiledInstruction::from)
-                .collect(),
+            instructions: instructions.instructions.iter().map(DbCompiledInstruction::from).collect(),
         }
     }
 }
@@ -304,10 +257,7 @@ impl From<&Reward> for DbReward {
             lamports: reward.lamports as i64,
             post_balance: reward.post_balance as i64,
             reward_type: get_reward_type(&reward.reward_type),
-            commission: reward
-                .commission
-                .as_ref()
-                .map(|commission| *commission as i16),
+            commission: reward.commission.as_ref().map(|commission| *commission as i16),
         }
     }
 }
@@ -370,33 +320,21 @@ impl From<&TransactionError> for DbTransactionErrorCode {
             TransactionError::SanitizeFailure => Self::SanitizeFailure,
             TransactionError::ClusterMaintenance => Self::ClusterMaintenance,
             TransactionError::AccountBorrowOutstanding => Self::AccountBorrowOutstanding,
-            TransactionError::WouldExceedMaxAccountCostLimit => {
-                Self::WouldExceedMaxAccountCostLimit
-            }
+            TransactionError::WouldExceedMaxAccountCostLimit => Self::WouldExceedMaxAccountCostLimit,
             TransactionError::WouldExceedMaxBlockCostLimit => Self::WouldExceedMaxBlockCostLimit,
             TransactionError::UnsupportedVersion => Self::UnsupportedVersion,
             TransactionError::InvalidWritableAccount => Self::InvalidWritableAccount,
-            TransactionError::WouldExceedAccountDataBlockLimit => {
-                Self::WouldExceedAccountDataBlockLimit
-            }
-            TransactionError::WouldExceedAccountDataTotalLimit => {
-                Self::WouldExceedAccountDataTotalLimit
-            }
+            TransactionError::WouldExceedAccountDataBlockLimit => Self::WouldExceedAccountDataBlockLimit,
+            TransactionError::WouldExceedAccountDataTotalLimit => Self::WouldExceedAccountDataTotalLimit,
             TransactionError::TooManyAccountLocks => Self::TooManyAccountLocks,
             TransactionError::AddressLookupTableNotFound => Self::AddressLookupTableNotFound,
-            TransactionError::InvalidAddressLookupTableOwner => {
-                Self::InvalidAddressLookupTableOwner
-            }
+            TransactionError::InvalidAddressLookupTableOwner => Self::InvalidAddressLookupTableOwner,
             TransactionError::InvalidAddressLookupTableData => Self::InvalidAddressLookupTableData,
-            TransactionError::InvalidAddressLookupTableIndex => {
-                Self::InvalidAddressLookupTableIndex
-            }
+            TransactionError::InvalidAddressLookupTableIndex => Self::InvalidAddressLookupTableIndex,
             TransactionError::InvalidRentPayingAccount => Self::InvalidRentPayingAccount,
             TransactionError::WouldExceedMaxVoteCostLimit => Self::WouldExceedMaxVoteCostLimit,
             TransactionError::DuplicateInstruction(_) => Self::DuplicateInstruction,
-            TransactionError::InsufficientFundsForRent { account_index: _ } => {
-                Self::InsufficientFundsForRent
-            }
+            TransactionError::InsufficientFundsForRent { account_index: _ } => Self::InsufficientFundsForRent,
         }
     }
 }
@@ -418,14 +356,9 @@ fn get_transaction_error(result: &Result<(), TransactionError>) -> Option<DbTran
         error_code: DbTransactionErrorCode::from(error),
         error_detail: {
             if let TransactionError::InstructionError(idx, instruction_error) = error {
-                let mut error_detail = format!(
-                    "InstructionError: idx ({}), error: ({})",
-                    idx, instruction_error
-                );
+                let mut error_detail = format!("InstructionError: idx ({}), error: ({})", idx, instruction_error);
                 if error_detail.len() > MAX_TRANSACTION_STATUS_LEN {
-                    error_detail = error_detail
-                        .to_string()
-                        .split_off(MAX_TRANSACTION_STATUS_LEN);
+                    error_detail = error_detail.to_string().split_off(MAX_TRANSACTION_STATUS_LEN);
                 }
                 Some(error_detail)
             } else {
@@ -451,46 +384,18 @@ impl From<&TransactionStatusMeta> for DbTransactionStatusMeta {
         Self {
             error: get_transaction_error(&meta.status),
             fee: meta.fee as i64,
-            pre_balances: meta
-                .pre_balances
-                .iter()
-                .map(|balance| *balance as i64)
-                .collect(),
-            post_balances: meta
-                .post_balances
-                .iter()
-                .map(|balance| *balance as i64)
-                .collect(),
-            inner_instructions: meta
-                .inner_instructions
-                .as_ref()
-                .map(|instructions| instructions.iter().map(DbInnerInstructions::from).collect()),
+            pre_balances: meta.pre_balances.iter().map(|balance| *balance as i64).collect(),
+            post_balances: meta.post_balances.iter().map(|balance| *balance as i64).collect(),
+            inner_instructions: meta.inner_instructions.as_ref().map(|instructions| instructions.iter().map(DbInnerInstructions::from).collect()),
             log_messages: meta.log_messages.clone(),
-            pre_token_balances: meta.pre_token_balances.as_ref().map(|balances| {
-                balances
-                    .iter()
-                    .map(DbTransactionTokenBalance::from)
-                    .collect()
-            }),
-            post_token_balances: meta.post_token_balances.as_ref().map(|balances| {
-                balances
-                    .iter()
-                    .map(DbTransactionTokenBalance::from)
-                    .collect()
-            }),
-            rewards: meta
-                .rewards
-                .as_ref()
-                .map(|rewards| rewards.iter().map(DbReward::from).collect()),
+            pre_token_balances: meta.pre_token_balances.as_ref().map(|balances| balances.iter().map(DbTransactionTokenBalance::from).collect()),
+            post_token_balances: meta.post_token_balances.as_ref().map(|balances| balances.iter().map(DbTransactionTokenBalance::from).collect()),
+            rewards: meta.rewards.as_ref().map(|rewards| rewards.iter().map(DbReward::from).collect()),
         }
     }
 }
 
-fn build_db_transaction(
-    slot: u64,
-    transaction_info: &ReplicaTransactionInfo,
-    transaction_write_version: u64,
-) -> DbTransaction {
+fn build_db_transaction(slot: u64, transaction_info: &ReplicaTransactionInfo, transaction_write_version: u64) -> DbTransaction {
     DbTransaction {
         signature: transaction_info.signature.as_ref().to_vec(),
         is_vote: transaction_info.is_vote,
@@ -500,26 +405,15 @@ fn build_db_transaction(
             SanitizedMessage::V0(_) => 1,
         },
         legacy_message: match transaction_info.transaction.message() {
-            SanitizedMessage::Legacy(legacy_message) => {
-                Some(DbTransactionMessage::from(legacy_message))
-            }
+            SanitizedMessage::Legacy(legacy_message) => Some(DbTransactionMessage::from(legacy_message)),
             _ => None,
         },
         v0_loaded_message: match transaction_info.transaction.message() {
             SanitizedMessage::V0(loaded_message) => Some(DbLoadedMessageV0::from(loaded_message)),
             _ => None,
         },
-        signatures: transaction_info
-            .transaction
-            .signatures()
-            .iter()
-            .map(|signature| signature.as_ref().to_vec())
-            .collect(),
-        message_hash: transaction_info
-            .transaction
-            .message_hash()
-            .as_ref()
-            .to_vec(),
+        signatures: transaction_info.transaction.signatures().iter().map(|signature| signature.as_ref().to_vec()).collect(),
+        message_hash: transaction_info.transaction.message_hash().as_ref().to_vec(),
         meta: DbTransactionStatusMeta::from(transaction_info.transaction_status_meta),
         write_version: transaction_write_version as i64,
         index: 0,
@@ -527,10 +421,7 @@ fn build_db_transaction(
 }
 
 impl SimplePostgresClient {
-    pub(crate) fn build_transaction_info_upsert_statement(
-        client: &mut Client,
-        config: &GeyserPluginPostgresConfig,
-    ) -> Result<Statement, GeyserPluginError> {
+    pub(crate) fn build_transaction_info_upsert_statement(client: &mut Client, config: &GeyserPluginPostgresConfig) -> Result<Statement, GeyserPluginError> {
         let stmt = "INSERT INTO transaction AS txn (signature, is_vote, slot, message_type, legacy_message, \
         v0_loaded_message, signatures, message_hash, meta, write_version, index, updated_on) \
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) \
@@ -548,22 +439,17 @@ impl SimplePostgresClient {
         let stmt = client.prepare(stmt);
 
         match stmt {
-            Err(err) => {
-                Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
-                    msg: format!(
-                        "Error in preparing for the transaction update PostgreSQL database: ({}) host: {:?} user: {:?} config: {:?}",
-                        err, config.host, config.user, config
-                    ),
-                })))
-            }
+            Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
+                msg: format!(
+                    "Error in preparing for the transaction update PostgreSQL database: ({}) host: {:?} user: {:?} config: {:?}",
+                    err, config.host, config.user, config
+                ),
+            }))),
             Ok(stmt) => Ok(stmt),
         }
     }
 
-    pub(crate) fn log_transaction_impl(
-        &mut self,
-        transaction_log_info: LogTransactionRequest,
-    ) -> Result<(), GeyserPluginError> {
+    pub(crate) fn log_transaction_impl(&mut self, transaction_log_info: LogTransactionRequest) -> Result<(), GeyserPluginError> {
         let client = self.client.get_mut().unwrap();
         let statement = &client.update_transaction_log_stmt;
         let client = &mut client.client;
@@ -589,10 +475,7 @@ impl SimplePostgresClient {
         );
 
         if let Err(err) = result {
-            let msg = format!(
-                "Failed to persist the update of transaction info to the PostgreSQL database. Error: {:?}",
-                err
-            );
+            let msg = format!("Failed to persist the update of transaction info to the PostgreSQL database. Error: {:?}", err);
             error!("{}", msg);
             return Err(GeyserPluginError::AccountsUpdateError { msg });
         }
@@ -602,27 +485,14 @@ impl SimplePostgresClient {
 }
 
 impl ParallelPostgresClient {
-    fn build_transaction_request(
-        slot: u64,
-        transaction_info: &ReplicaTransactionInfo,
-        transaction_write_version: u64,
-    ) -> LogTransactionRequest {
+    fn build_transaction_request(slot: u64, transaction_info: &ReplicaTransactionInfo, transaction_write_version: u64) -> LogTransactionRequest {
         LogTransactionRequest {
-            transaction_info: build_db_transaction(
-                slot,
-                transaction_info,
-                transaction_write_version,
-            ),
+            transaction_info: build_db_transaction(slot, transaction_info, transaction_write_version),
         }
     }
 
-    pub fn log_transaction_info(
-        &mut self,
-        transaction_info: &ReplicaTransactionInfo,
-        slot: u64,
-    ) -> Result<(), GeyserPluginError> {
-        self.transaction_write_version
-            .fetch_add(1, Ordering::Relaxed);
+    pub fn log_transaction_info(&mut self, transaction_info: &ReplicaTransactionInfo, slot: u64) -> Result<(), GeyserPluginError> {
+        self.transaction_write_version.fetch_add(1, Ordering::Relaxed);
         let wrk_item = DbWorkItem::LogTransaction(Box::new(Self::build_transaction_request(
             slot,
             transaction_info,
@@ -640,49 +510,30 @@ impl ParallelPostgresClient {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use {
-        super::*,
-        solana_account_decoder::parse_token::UiTokenAmount,
-        solana_sdk::{
-            hash::Hash,
-            message::VersionedMessage,
-            pubkey::Pubkey,
-            signature::{Keypair, Signature, Signer},
-            system_transaction,
-            transaction::{
-                SanitizedTransaction, SimpleAddressLoader, Transaction, VersionedTransaction,
-            },
-        },
-    };
+    use super::*;
+    use solana_account_decoder::parse_token::UiTokenAmount;
+    use solana_sdk::hash::Hash;
+    use solana_sdk::message::VersionedMessage;
+    use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::signature::Keypair;
+    use solana_sdk::signature::Signature;
+    use solana_sdk::signature::Signer;
+    use solana_sdk::system_transaction;
+    use solana_sdk::transaction::SanitizedTransaction;
+    use solana_sdk::transaction::SimpleAddressLoader;
+    use solana_sdk::transaction::Transaction;
+    use solana_sdk::transaction::VersionedTransaction;
 
-    fn check_compiled_instruction_equality(
-        compiled_instruction: &CompiledInstruction,
-        db_compiled_instruction: &DbCompiledInstruction,
-    ) {
-        assert_eq!(
-            compiled_instruction.program_id_index,
-            db_compiled_instruction.program_id_index as u8
-        );
-        assert_eq!(
-            compiled_instruction.accounts.len(),
-            db_compiled_instruction.accounts.len()
-        );
-        assert_eq!(
-            compiled_instruction.data.len(),
-            db_compiled_instruction.data.len()
-        );
+    fn check_compiled_instruction_equality(compiled_instruction: &CompiledInstruction, db_compiled_instruction: &DbCompiledInstruction) {
+        assert_eq!(compiled_instruction.program_id_index, db_compiled_instruction.program_id_index as u8);
+        assert_eq!(compiled_instruction.accounts.len(), db_compiled_instruction.accounts.len());
+        assert_eq!(compiled_instruction.data.len(), db_compiled_instruction.data.len());
 
         for i in 0..compiled_instruction.accounts.len() {
-            assert_eq!(
-                compiled_instruction.accounts[i],
-                db_compiled_instruction.accounts[i] as u8
-            )
+            assert_eq!(compiled_instruction.accounts[i], db_compiled_instruction.accounts[i] as u8)
         }
         for i in 0..compiled_instruction.data.len() {
-            assert_eq!(
-                compiled_instruction.data[i],
-                db_compiled_instruction.data[i] as u8
-            )
+            assert_eq!(compiled_instruction.data[i], db_compiled_instruction.data[i] as u8)
         }
     }
 
@@ -698,21 +549,12 @@ pub(crate) mod tests {
         check_compiled_instruction_equality(&compiled_instruction, &db_compiled_instruction);
     }
 
-    fn check_inner_instructions_equality(
-        inner_instructions: &InnerInstructions,
-        db_inner_instructions: &DbInnerInstructions,
-    ) {
+    fn check_inner_instructions_equality(inner_instructions: &InnerInstructions, db_inner_instructions: &DbInnerInstructions) {
         assert_eq!(inner_instructions.index, db_inner_instructions.index as u8);
-        assert_eq!(
-            inner_instructions.instructions.len(),
-            db_inner_instructions.instructions.len()
-        );
+        assert_eq!(inner_instructions.instructions.len(), db_inner_instructions.instructions.len());
 
         for i in 0..inner_instructions.instructions.len() {
-            check_compiled_instruction_equality(
-                &inner_instructions.instructions[i],
-                &db_inner_instructions.instructions[i],
-            )
+            check_compiled_instruction_equality(&inner_instructions.instructions[i], &db_inner_instructions.instructions[i])
         }
     }
 
@@ -738,30 +580,15 @@ pub(crate) mod tests {
         check_inner_instructions_equality(&inner_instructions, &db_inner_instructions);
     }
 
-    fn check_address_table_lookups_equality(
-        address_table_lookups: &MessageAddressTableLookup,
-        db_address_table_lookups: &DbTransactionMessageAddressTableLookup,
-    ) {
-        assert_eq!(
-            address_table_lookups.writable_indexes.len(),
-            db_address_table_lookups.writable_indexes.len()
-        );
-        assert_eq!(
-            address_table_lookups.readonly_indexes.len(),
-            db_address_table_lookups.readonly_indexes.len()
-        );
+    fn check_address_table_lookups_equality(address_table_lookups: &MessageAddressTableLookup, db_address_table_lookups: &DbTransactionMessageAddressTableLookup) {
+        assert_eq!(address_table_lookups.writable_indexes.len(), db_address_table_lookups.writable_indexes.len());
+        assert_eq!(address_table_lookups.readonly_indexes.len(), db_address_table_lookups.readonly_indexes.len());
 
         for i in 0..address_table_lookups.writable_indexes.len() {
-            assert_eq!(
-                address_table_lookups.writable_indexes[i],
-                db_address_table_lookups.writable_indexes[i] as u8
-            )
+            assert_eq!(address_table_lookups.writable_indexes[i], db_address_table_lookups.writable_indexes[i] as u8)
         }
         for i in 0..address_table_lookups.readonly_indexes.len() {
-            assert_eq!(
-                address_table_lookups.readonly_indexes[i],
-                db_address_table_lookups.readonly_indexes[i] as u8
-            )
+            assert_eq!(address_table_lookups.readonly_indexes[i], db_address_table_lookups.readonly_indexes[i] as u8)
         }
     }
 
@@ -773,8 +600,7 @@ pub(crate) mod tests {
             readonly_indexes: vec![4, 5, 6],
         };
 
-        let db_address_table_lookups =
-            DbTransactionMessageAddressTableLookup::from(&address_table_lookups);
+        let db_address_table_lookups = DbTransactionMessageAddressTableLookup::from(&address_table_lookups);
         check_address_table_lookups_equality(&address_table_lookups, &db_address_table_lookups);
     }
 
@@ -783,13 +609,7 @@ pub(crate) mod tests {
         assert_eq!(reward.lamports, db_reward.lamports);
         assert_eq!(reward.post_balance, db_reward.post_balance as u64);
         assert_eq!(get_reward_type(&reward.reward_type), db_reward.reward_type);
-        assert_eq!(
-            reward.commission,
-            db_reward
-                .commission
-                .as_ref()
-                .map(|commission| *commission as u8)
-        );
+        assert_eq!(reward.commission, db_reward.commission.as_ref().map(|commission| *commission as u8));
     }
 
     #[test]
@@ -806,26 +626,11 @@ pub(crate) mod tests {
         check_reward_equality(&reward, &db_reward);
     }
 
-    fn check_transaction_token_balance_equality(
-        transaction_token_balance: &TransactionTokenBalance,
-        db_transaction_token_balance: &DbTransactionTokenBalance,
-    ) {
-        assert_eq!(
-            transaction_token_balance.account_index,
-            db_transaction_token_balance.account_index as u8
-        );
-        assert_eq!(
-            transaction_token_balance.mint,
-            db_transaction_token_balance.mint
-        );
-        assert_eq!(
-            transaction_token_balance.ui_token_amount.ui_amount,
-            db_transaction_token_balance.ui_token_amount
-        );
-        assert_eq!(
-            transaction_token_balance.owner,
-            db_transaction_token_balance.owner
-        );
+    fn check_transaction_token_balance_equality(transaction_token_balance: &TransactionTokenBalance, db_transaction_token_balance: &DbTransactionTokenBalance) {
+        assert_eq!(transaction_token_balance.account_index, db_transaction_token_balance.account_index as u8);
+        assert_eq!(transaction_token_balance.mint, db_transaction_token_balance.mint);
+        assert_eq!(transaction_token_balance.ui_token_amount.ui_amount, db_transaction_token_balance.ui_token_amount);
+        assert_eq!(transaction_token_balance.owner, db_transaction_token_balance.owner);
     }
 
     #[test]
@@ -843,108 +648,53 @@ pub(crate) mod tests {
             program_id: "program_id".to_string(),
         };
 
-        let db_transaction_token_balance =
-            DbTransactionTokenBalance::from(&transaction_token_balance);
+        let db_transaction_token_balance = DbTransactionTokenBalance::from(&transaction_token_balance);
 
-        check_transaction_token_balance_equality(
-            &transaction_token_balance,
-            &db_transaction_token_balance,
-        );
+        check_transaction_token_balance_equality(&transaction_token_balance, &db_transaction_token_balance);
     }
 
-    fn check_token_balances(
-        token_balances: &Option<Vec<TransactionTokenBalance>>,
-        db_token_balances: &Option<Vec<DbTransactionTokenBalance>>,
-    ) {
+    fn check_token_balances(token_balances: &Option<Vec<TransactionTokenBalance>>, db_token_balances: &Option<Vec<DbTransactionTokenBalance>>) {
         assert_eq!(
-            token_balances
-                .as_ref()
-                .map(|token_balances| token_balances.len()),
-            db_token_balances
-                .as_ref()
-                .map(|token_balances| token_balances.len()),
+            token_balances.as_ref().map(|token_balances| token_balances.len()),
+            db_token_balances.as_ref().map(|token_balances| token_balances.len()),
         );
 
         if token_balances.is_some() {
             for i in 0..token_balances.as_ref().unwrap().len() {
-                check_transaction_token_balance_equality(
-                    &token_balances.as_ref().unwrap()[i],
-                    &db_token_balances.as_ref().unwrap()[i],
-                );
+                check_transaction_token_balance_equality(&token_balances.as_ref().unwrap()[i], &db_token_balances.as_ref().unwrap()[i]);
             }
         }
     }
 
-    fn check_transaction_status_meta(
-        transaction_status_meta: &TransactionStatusMeta,
-        db_transaction_status_meta: &DbTransactionStatusMeta,
-    ) {
-        assert_eq!(
-            get_transaction_error(&transaction_status_meta.status),
-            db_transaction_status_meta.error
-        );
-        assert_eq!(
-            transaction_status_meta.fee,
-            db_transaction_status_meta.fee as u64
-        );
-        assert_eq!(
-            transaction_status_meta.pre_balances.len(),
-            db_transaction_status_meta.pre_balances.len()
-        );
+    fn check_transaction_status_meta(transaction_status_meta: &TransactionStatusMeta, db_transaction_status_meta: &DbTransactionStatusMeta) {
+        assert_eq!(get_transaction_error(&transaction_status_meta.status), db_transaction_status_meta.error);
+        assert_eq!(transaction_status_meta.fee, db_transaction_status_meta.fee as u64);
+        assert_eq!(transaction_status_meta.pre_balances.len(), db_transaction_status_meta.pre_balances.len());
 
         for i in 0..transaction_status_meta.pre_balances.len() {
-            assert_eq!(
-                transaction_status_meta.pre_balances[i],
-                db_transaction_status_meta.pre_balances[i] as u64
-            );
+            assert_eq!(transaction_status_meta.pre_balances[i], db_transaction_status_meta.pre_balances[i] as u64);
         }
-        assert_eq!(
-            transaction_status_meta.post_balances.len(),
-            db_transaction_status_meta.post_balances.len()
-        );
+        assert_eq!(transaction_status_meta.post_balances.len(), db_transaction_status_meta.post_balances.len());
         for i in 0..transaction_status_meta.post_balances.len() {
-            assert_eq!(
-                transaction_status_meta.post_balances[i],
-                db_transaction_status_meta.post_balances[i] as u64
-            );
+            assert_eq!(transaction_status_meta.post_balances[i], db_transaction_status_meta.post_balances[i] as u64);
         }
         assert_eq!(
-            transaction_status_meta
-                .inner_instructions
-                .as_ref()
-                .map(|inner_instructions| inner_instructions.len()),
-            db_transaction_status_meta
-                .inner_instructions
-                .as_ref()
-                .map(|inner_instructions| inner_instructions.len()),
+            transaction_status_meta.inner_instructions.as_ref().map(|inner_instructions| inner_instructions.len()),
+            db_transaction_status_meta.inner_instructions.as_ref().map(|inner_instructions| inner_instructions.len()),
         );
 
         if transaction_status_meta.inner_instructions.is_some() {
-            for i in 0..transaction_status_meta
-                .inner_instructions
-                .as_ref()
-                .unwrap()
-                .len()
-            {
+            for i in 0..transaction_status_meta.inner_instructions.as_ref().unwrap().len() {
                 check_inner_instructions_equality(
                     &transaction_status_meta.inner_instructions.as_ref().unwrap()[i],
-                    &db_transaction_status_meta
-                        .inner_instructions
-                        .as_ref()
-                        .unwrap()[i],
+                    &db_transaction_status_meta.inner_instructions.as_ref().unwrap()[i],
                 );
             }
         }
 
         assert_eq!(
-            transaction_status_meta
-                .log_messages
-                .as_ref()
-                .map(|log_messages| log_messages.len()),
-            db_transaction_status_meta
-                .log_messages
-                .as_ref()
-                .map(|log_messages| log_messages.len()),
+            transaction_status_meta.log_messages.as_ref().map(|log_messages| log_messages.len()),
+            db_transaction_status_meta.log_messages.as_ref().map(|log_messages| log_messages.len()),
         );
 
         if transaction_status_meta.log_messages.is_some() {
@@ -956,33 +706,18 @@ pub(crate) mod tests {
             }
         }
 
-        check_token_balances(
-            &transaction_status_meta.pre_token_balances,
-            &db_transaction_status_meta.pre_token_balances,
-        );
+        check_token_balances(&transaction_status_meta.pre_token_balances, &db_transaction_status_meta.pre_token_balances);
 
-        check_token_balances(
-            &transaction_status_meta.post_token_balances,
-            &db_transaction_status_meta.post_token_balances,
-        );
+        check_token_balances(&transaction_status_meta.post_token_balances, &db_transaction_status_meta.post_token_balances);
 
         assert_eq!(
-            transaction_status_meta
-                .rewards
-                .as_ref()
-                .map(|rewards| rewards.len()),
-            db_transaction_status_meta
-                .rewards
-                .as_ref()
-                .map(|rewards| rewards.len()),
+            transaction_status_meta.rewards.as_ref().map(|rewards| rewards.len()),
+            db_transaction_status_meta.rewards.as_ref().map(|rewards| rewards.len()),
         );
 
         if transaction_status_meta.rewards.is_some() {
             for i in 0..transaction_status_meta.rewards.as_ref().unwrap().len() {
-                check_reward_equality(
-                    &transaction_status_meta.rewards.as_ref().unwrap()[i],
-                    &db_transaction_status_meta.rewards.as_ref().unwrap()[i],
-                );
+                check_reward_equality(&transaction_status_meta.rewards.as_ref().unwrap()[i], &db_transaction_status_meta.rewards.as_ref().unwrap()[i]);
             }
         }
     }
@@ -1091,22 +826,10 @@ pub(crate) mod tests {
         check_transaction_status_meta(&transaction_status_meta, &db_transaction_status_meta);
     }
 
-    fn check_message_header_equality(
-        message_header: &MessageHeader,
-        db_message_header: &DbTransactionMessageHeader,
-    ) {
-        assert_eq!(
-            message_header.num_readonly_signed_accounts,
-            db_message_header.num_readonly_signed_accounts as u8
-        );
-        assert_eq!(
-            message_header.num_readonly_unsigned_accounts,
-            db_message_header.num_readonly_unsigned_accounts as u8
-        );
-        assert_eq!(
-            message_header.num_required_signatures,
-            db_message_header.num_required_signatures as u8
-        );
+    fn check_message_header_equality(message_header: &MessageHeader, db_message_header: &DbTransactionMessageHeader) {
+        assert_eq!(message_header.num_readonly_signed_accounts, db_message_header.num_readonly_signed_accounts as u8);
+        assert_eq!(message_header.num_readonly_unsigned_accounts, db_message_header.num_readonly_unsigned_accounts as u8);
+        assert_eq!(message_header.num_required_signatures, db_message_header.num_required_signatures as u8);
     }
 
     #[test]
@@ -1129,10 +852,7 @@ pub(crate) mod tests {
         }
         assert_eq!(message.instructions.len(), db_message.instructions.len());
         for i in 0..message.instructions.len() {
-            check_compiled_instruction_equality(
-                &message.instructions[i],
-                &db_message.instructions[i],
-            );
+            check_compiled_instruction_equality(&message.instructions[i], &db_message.instructions[i]);
         }
     }
 
@@ -1168,10 +888,7 @@ pub(crate) mod tests {
         check_transaction_message_equality(&message, &db_message);
     }
 
-    fn check_transaction_message_v0_equality(
-        message: &v0::Message,
-        db_message: &DbTransactionMessageV0,
-    ) {
+    fn check_transaction_message_v0_equality(message: &v0::Message, db_message: &DbTransactionMessageV0) {
         check_message_header_equality(&message.header, &db_message.header);
         assert_eq!(message.account_keys.len(), db_message.account_keys.len());
         for i in 0..message.account_keys.len() {
@@ -1179,20 +896,11 @@ pub(crate) mod tests {
         }
         assert_eq!(message.instructions.len(), db_message.instructions.len());
         for i in 0..message.instructions.len() {
-            check_compiled_instruction_equality(
-                &message.instructions[i],
-                &db_message.instructions[i],
-            );
+            check_compiled_instruction_equality(&message.instructions[i], &db_message.instructions[i]);
         }
-        assert_eq!(
-            message.address_table_lookups.len(),
-            db_message.address_table_lookups.len()
-        );
+        assert_eq!(message.address_table_lookups.len(), db_message.address_table_lookups.len());
         for i in 0..message.address_table_lookups.len() {
-            check_address_table_lookups_equality(
-                &message.address_table_lookups[i],
-                &db_message.address_table_lookups[i],
-            );
+            check_address_table_lookups_equality(&message.address_table_lookups[i], &db_message.address_table_lookups[i]);
         }
     }
 
@@ -1203,13 +911,7 @@ pub(crate) mod tests {
                 num_readonly_unsigned_accounts: 2,
                 num_required_signatures: 3,
             },
-            account_keys: vec![
-                Pubkey::new_unique(),
-                Pubkey::new_unique(),
-                Pubkey::new_unique(),
-                Pubkey::new_unique(),
-                Pubkey::new_unique(),
-            ],
+            account_keys: vec![Pubkey::new_unique(), Pubkey::new_unique(), Pubkey::new_unique(), Pubkey::new_unique(), Pubkey::new_unique()],
             recent_blockhash: Hash::new_unique(),
             instructions: vec![
                 CompiledInstruction {
@@ -1246,37 +948,19 @@ pub(crate) mod tests {
         check_transaction_message_v0_equality(&message, &db_message);
     }
 
-    fn check_loaded_addresses(
-        loaded_addresses: &LoadedAddresses,
-        db_loaded_addresses: &DbLoadedAddresses,
-    ) {
-        assert_eq!(
-            loaded_addresses.writable.len(),
-            db_loaded_addresses.writable.len()
-        );
+    fn check_loaded_addresses(loaded_addresses: &LoadedAddresses, db_loaded_addresses: &DbLoadedAddresses) {
+        assert_eq!(loaded_addresses.writable.len(), db_loaded_addresses.writable.len());
         for i in 0..loaded_addresses.writable.len() {
-            assert_eq!(
-                loaded_addresses.writable[i].as_ref(),
-                db_loaded_addresses.writable[i]
-            );
+            assert_eq!(loaded_addresses.writable[i].as_ref(), db_loaded_addresses.writable[i]);
         }
 
-        assert_eq!(
-            loaded_addresses.readonly.len(),
-            db_loaded_addresses.readonly.len()
-        );
+        assert_eq!(loaded_addresses.readonly.len(), db_loaded_addresses.readonly.len());
         for i in 0..loaded_addresses.readonly.len() {
-            assert_eq!(
-                loaded_addresses.readonly[i].as_ref(),
-                db_loaded_addresses.readonly[i]
-            );
+            assert_eq!(loaded_addresses.readonly[i].as_ref(), db_loaded_addresses.readonly[i]);
         }
     }
 
-    fn check_loaded_message_v0_equality(
-        message: &v0::LoadedMessage,
-        db_message: &DbLoadedMessageV0,
-    ) {
+    fn check_loaded_message_v0_equality(message: &v0::LoadedMessage, db_message: &DbLoadedMessageV0) {
         check_transaction_message_v0_equality(&message.message, &db_message.message);
         check_loaded_addresses(&message.loaded_addresses, &db_message.loaded_addresses);
     }
@@ -1295,47 +979,28 @@ pub(crate) mod tests {
         check_loaded_message_v0_equality(&message, &db_message);
     }
 
-    fn check_transaction(
-        slot: u64,
-        transaction: &ReplicaTransactionInfo,
-        db_transaction: &DbTransaction,
-    ) {
+    fn check_transaction(slot: u64, transaction: &ReplicaTransactionInfo, db_transaction: &DbTransaction) {
         assert_eq!(transaction.signature.as_ref(), db_transaction.signature);
         assert_eq!(transaction.is_vote, db_transaction.is_vote);
         assert_eq!(slot, db_transaction.slot as u64);
         match transaction.transaction.message() {
             SanitizedMessage::Legacy(message) => {
                 assert_eq!(db_transaction.message_type, 0);
-                check_transaction_message_equality(
-                    message,
-                    db_transaction.legacy_message.as_ref().unwrap(),
-                );
+                check_transaction_message_equality(message, db_transaction.legacy_message.as_ref().unwrap());
             }
             SanitizedMessage::V0(message) => {
                 assert_eq!(db_transaction.message_type, 1);
-                check_loaded_message_v0_equality(
-                    message,
-                    db_transaction.v0_loaded_message.as_ref().unwrap(),
-                );
+                check_loaded_message_v0_equality(message, db_transaction.v0_loaded_message.as_ref().unwrap());
             }
         }
 
-        assert_eq!(
-            transaction.transaction.signatures().len(),
-            db_transaction.signatures.len()
-        );
+        assert_eq!(transaction.transaction.signatures().len(), db_transaction.signatures.len());
 
         for i in 0..transaction.transaction.signatures().len() {
-            assert_eq!(
-                transaction.transaction.signatures()[i].as_ref(),
-                db_transaction.signatures[i]
-            );
+            assert_eq!(transaction.transaction.signatures()[i].as_ref(), db_transaction.signatures[i]);
         }
 
-        assert_eq!(
-            transaction.transaction.message_hash().as_ref(),
-            db_transaction.message_hash
-        );
+        assert_eq!(transaction.transaction.message_hash().as_ref(), db_transaction.message_hash);
 
         check_transaction_status_meta(transaction.transaction_status_meta, &db_transaction.meta);
     }
@@ -1356,14 +1021,7 @@ pub(crate) mod tests {
 
         let transaction = VersionedTransaction::from(transaction);
 
-        let transaction = SanitizedTransaction::try_create(
-            transaction,
-            message_hash,
-            Some(true),
-            SimpleAddressLoader::Disabled,
-            false,
-        )
-        .unwrap();
+        let transaction = SanitizedTransaction::try_create(transaction, message_hash, Some(true), SimpleAddressLoader::Disabled, false).unwrap();
 
         let transaction_status_meta = build_transaction_status_meta();
         let transaction_info = ReplicaTransactionInfo {
@@ -1380,11 +1038,7 @@ pub(crate) mod tests {
 
     fn build_test_transaction_v0() -> VersionedTransaction {
         VersionedTransaction {
-            signatures: vec![
-                Signature::new(&[1u8; 64]),
-                Signature::new(&[2u8; 64]),
-                Signature::new(&[3u8; 64]),
-            ],
+            signatures: vec![Signature::new(&[1u8; 64]), Signature::new(&[2u8; 64]), Signature::new(&[3u8; 64])],
             message: VersionedMessage::V0(build_transaction_message_v0()),
         }
     }

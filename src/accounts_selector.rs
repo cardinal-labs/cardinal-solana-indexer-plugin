@@ -1,4 +1,5 @@
-use {log::*, std::collections::HashSet};
+use log::*;
+use std::collections::HashSet;
 
 #[derive(Debug)]
 pub(crate) struct AccountsSelector {
@@ -17,10 +18,7 @@ impl AccountsSelector {
     }
 
     pub fn new(accounts: &[String], owners: &[String]) -> Self {
-        info!(
-            "Creating AccountsSelector from accounts: {:?}, owners: {:?}",
-            accounts, owners
-        );
+        info!("[accounts_selector] accounts=[{:?}] owners=[{:?}]", accounts, owners);
 
         let select_all_accounts = accounts.iter().any(|key| key == "*");
         if select_all_accounts {
@@ -30,14 +28,8 @@ impl AccountsSelector {
                 select_all_accounts,
             };
         }
-        let accounts = accounts
-            .iter()
-            .map(|key| bs58::decode(key).into_vec().unwrap())
-            .collect();
-        let owners = owners
-            .iter()
-            .map(|key| bs58::decode(key).into_vec().unwrap())
-            .collect();
+        let accounts = accounts.iter().map(|key| bs58::decode(key).into_vec().unwrap()).collect();
+        let owners = owners.iter().map(|key| bs58::decode(key).into_vec().unwrap()).collect();
         AccountsSelector {
             accounts,
             owners,
@@ -61,14 +53,8 @@ pub(crate) mod tests {
 
     #[test]
     fn test_create_accounts_selector() {
-        AccountsSelector::new(
-            &["9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin".to_string()],
-            &[],
-        );
+        AccountsSelector::new(&["9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin".to_string()], &[]);
 
-        AccountsSelector::new(
-            &[],
-            &["9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin".to_string()],
-        );
+        AccountsSelector::new(&[], &["9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin".to_string()]);
     }
 }
