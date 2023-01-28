@@ -7,7 +7,6 @@ mod postgres_client_transaction;
 use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
 use crate::parallel_client::ParallelPostgresClient;
-use crate::parallel_client_worker::DbWorkItem;
 use crate::postgres_client::postgres_client_account_index::TokenSecondaryIndexEntry;
 use chrono::Utc;
 use log::*;

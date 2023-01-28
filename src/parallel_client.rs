@@ -4,7 +4,6 @@ use crate::parallel_client_worker::PostgresClientWorker;
 use crate::postgres_client::abort;
 use crate::postgres_client::DbAccountInfo;
 use crate::postgres_client::DbBlockInfo;
-use crate::postgres_client::LogTransactionRequest;
 use crate::postgres_client::ReadableAccountInfo;
 use crate::postgres_client::UpdateAccountRequest;
 use crate::postgres_client::UpdateBlockMetadataRequest;

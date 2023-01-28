@@ -1,5 +1,6 @@
 use log::*;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashSet;
 
 /// * The `accounts_selector` section allows the user to controls accounts selections.

@@ -1,6 +1,5 @@
 use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
-use crate::postgres_client::DbWorkItem;
 use crate::postgres_client::ParallelPostgresClient;
 use crate::postgres_client::SimplePostgresClient;
 use chrono::Utc;
