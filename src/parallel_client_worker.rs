@@ -1,5 +1,5 @@
+use crate::abort;
 use crate::config::GeyserPluginPostgresConfig;
-use crate::postgres_client::abort;
 use crate::postgres_client::DbAccountInfo;
 use crate::postgres_client::DbBlockInfo;
 use crate::postgres_client::DbTransaction;

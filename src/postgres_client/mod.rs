@@ -2,12 +2,13 @@
 
 mod postgres_client_account_index;
 mod postgres_client_block_metadata;
+mod postgres_client_token_account_index;
 mod postgres_client_transaction;
 
 use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
 use crate::parallel_client::ParallelPostgresClient;
-use crate::postgres_client::postgres_client_account_index::TokenSecondaryIndexEntry;
+use crate::postgres_client::postgres_client_account_index::ACCOUNT_COLUMN_COUNT;
 use chrono::Utc;
 use log::*;
 use openssl::ssl::SslConnector;
@@ -29,13 +30,13 @@ use tokio_postgres::types;
 pub use self::postgres_client_account_index::DbAccountInfo;
 pub use self::postgres_client_account_index::ReadableAccountInfo;
 pub use self::postgres_client_block_metadata::DbBlockInfo;
+use self::postgres_client_token_account_index::TokenSecondaryIndexEntry;
 pub use self::postgres_client_transaction::build_db_transaction;
 pub use self::postgres_client_transaction::DbTransaction;
 
 /// The maximum asynchronous requests allowed in the channel to avoid excessive
 /// memory usage. The downside -- calls after this threshold is reached can get blocked.
 const SAFE_BATCH_STARTING_SLOT_CUSHION: u64 = 2 * 40960;
-const ACCOUNT_COLUMN_COUNT: usize = 10;
 
 struct PostgresSqlClientWrapper {
     client: Client,
@@ -63,18 +64,6 @@ pub struct SimplePostgresClient {
     client: Mutex<PostgresSqlClientWrapper>,
 }
 
-pub(crate) fn abort() -> ! {
-    #[cfg(not(test))]
-    {
-        // standard error is usually redirected to a log file, cry for help on standard output as well
-        eprintln!("Validator process aborted. The validator log may contain further details");
-        std::process::exit(1);
-    }
-
-    #[cfg(test)]
-    panic!("process::exit(1) is intercepted for friendly test failure...");
-}
-
 pub trait PostgresClient {
     fn join(&mut self) -> thread::Result<()> {
         Ok(())
@@ -93,62 +82,64 @@ pub trait PostgresClient {
 
 impl SimplePostgresClient {
     pub fn connect_to_db(config: &GeyserPluginPostgresConfig) -> Result<Client, GeyserPluginError> {
-        let connection_str = if let Some(connection_str) = &config.connection_str {
-            connection_str.clone()
-        } else {
-            if config.host.is_none() || config.user.is_none() {
-                let msg = format!(
-                    "\"connection_str\": {:?}, or \"host\": {:?} \"user\": {:?} must be specified",
-                    config.connection_str, config.host, config.user
-                );
-                return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConfigurationError { msg })));
+        let connection_str = match &config.connection_str {
+            Some(connection_str) => connection_str.clone(),
+            None => {
+                if config.host.is_none() || config.user.is_none() {
+                    let msg = format!(
+                        "\"connection_str\": {:?}, or \"host\": {:?} \"user\": {:?} must be specified",
+                        config.connection_str, config.host, config.user
+                    );
+                    return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConfigurationError { msg })));
+                }
+                format!("host={} user={} port={}", config.host.as_ref().unwrap(), config.user.as_ref().unwrap(), config.port)
             }
-            format!("host={} user={} port={}", config.host.as_ref().unwrap(), config.user.as_ref().unwrap(), config.port)
         };
 
-        let result = if let Some(true) = config.use_ssl {
-            if config.server_ca.is_none() {
-                let msg = "\"server_ca\" must be specified when \"use_ssl\" is set".to_string();
-                return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConfigurationError { msg })));
-            }
-            if config.client_cert.is_none() {
-                let msg = "\"client_cert\" must be specified when \"use_ssl\" is set".to_string();
-                return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConfigurationError { msg })));
-            }
-            if config.client_key.is_none() {
-                let msg = "\"client_key\" must be specified when \"use_ssl\" is set".to_string();
-                return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConfigurationError { msg })));
-            }
-            let mut builder = SslConnector::builder(SslMethod::tls()).unwrap();
-            if let Err(err) = builder.set_ca_file(config.server_ca.as_ref().unwrap()) {
-                let msg = format!(
-                    "Failed to set the server certificate specified by \"server_ca\": {}. Error: ({})",
-                    config.server_ca.as_ref().unwrap(),
-                    err
-                );
-                return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConfigurationError { msg })));
-            }
-            if let Err(err) = builder.set_certificate_file(config.client_cert.as_ref().unwrap(), SslFiletype::PEM) {
-                let msg = format!(
-                    "Failed to set the client certificate specified by \"client_cert\": {}. Error: ({})",
-                    config.client_cert.as_ref().unwrap(),
-                    err
-                );
-                return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConfigurationError { msg })));
-            }
-            if let Err(err) = builder.set_private_key_file(config.client_key.as_ref().unwrap(), SslFiletype::PEM) {
-                let msg = format!("Failed to set the client key specified by \"client_key\": {}. Error: ({})", config.client_key.as_ref().unwrap(), err);
-                return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConfigurationError { msg })));
-            }
+        let result = match config.use_ssl {
+            Some(true) => {
+                if config.server_ca.is_none() {
+                    let msg = "\"server_ca\" must be specified when \"use_ssl\" is set".to_string();
+                    return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConfigurationError { msg })));
+                }
+                if config.client_cert.is_none() {
+                    let msg = "\"client_cert\" must be specified when \"use_ssl\" is set".to_string();
+                    return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConfigurationError { msg })));
+                }
+                if config.client_key.is_none() {
+                    let msg = "\"client_key\" must be specified when \"use_ssl\" is set".to_string();
+                    return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConfigurationError { msg })));
+                }
+                let mut builder = SslConnector::builder(SslMethod::tls()).unwrap();
+                if let Err(err) = builder.set_ca_file(config.server_ca.as_ref().unwrap()) {
+                    let msg = format!(
+                        "Failed to set the server certificate specified by \"server_ca\": {}. Error: ({})",
+                        config.server_ca.as_ref().unwrap(),
+                        err
+                    );
+                    return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConfigurationError { msg })));
+                }
+                if let Err(err) = builder.set_certificate_file(config.client_cert.as_ref().unwrap(), SslFiletype::PEM) {
+                    let msg = format!(
+                        "Failed to set the client certificate specified by \"client_cert\": {}. Error: ({})",
+                        config.client_cert.as_ref().unwrap(),
+                        err
+                    );
+                    return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConfigurationError { msg })));
+                }
+                if let Err(err) = builder.set_private_key_file(config.client_key.as_ref().unwrap(), SslFiletype::PEM) {
+                    let msg = format!("Failed to set the client key specified by \"client_key\": {}. Error: ({})", config.client_key.as_ref().unwrap(), err);
+                    return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConfigurationError { msg })));
+                }
 
-            let mut connector = MakeTlsConnector::new(builder.build());
-            connector.set_callback(|connect_config, _domain| {
-                connect_config.set_verify_hostname(false);
-                Ok(())
-            });
-            Client::connect(&connection_str, connector)
-        } else {
-            Client::connect(&connection_str, NoTls)
+                let mut connector = MakeTlsConnector::new(builder.build());
+                connector.set_callback(|connect_config, _domain| {
+                    connect_config.set_verify_hostname(false);
+                    Ok(())
+                });
+                Client::connect(&connection_str, connector)
+            }
+            _ => Client::connect(&connection_str, NoTls),
         };
 
         match result {
@@ -158,72 +149,6 @@ impl SimplePostgresClient {
                 Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConnectionError { msg })))
             }
             Ok(client) => Ok(client),
-        }
-    }
-
-    fn build_bulk_account_insert_statement(client: &mut Client, config: &GeyserPluginPostgresConfig) -> Result<Statement, GeyserPluginError> {
-        let mut stmt = String::from("INSERT INTO account AS acct (pubkey, slot, owner, lamports, executable, rent_epoch, data, write_version, updated_on, txn_signature) VALUES");
-        for j in 0..config.batch_size {
-            let row = j * ACCOUNT_COLUMN_COUNT;
-            let val_str = format!(
-                "(${}, ${}, ${}, ${}, ${}, ${}, ${}, ${}, ${}, ${})",
-                row + 1,
-                row + 2,
-                row + 3,
-                row + 4,
-                row + 5,
-                row + 6,
-                row + 7,
-                row + 8,
-                row + 9,
-                row + 10,
-            );
-
-            if j == 0 {
-                stmt = format!("{} {}", &stmt, val_str);
-            } else {
-                stmt = format!("{}, {}", &stmt, val_str);
-            }
-        }
-
-        let handle_conflict =
-            "ON CONFLICT (pubkey) DO UPDATE SET slot=excluded.slot, owner=excluded.owner, lamports=excluded.lamports, executable=excluded.executable, rent_epoch=excluded.rent_epoch, \
-            data=excluded.data, write_version=excluded.write_version, updated_on=excluded.updated_on, txn_signature=excluded.txn_signature WHERE acct.slot < excluded.slot OR (\
-            acct.slot = excluded.slot AND acct.write_version < excluded.write_version)";
-
-        stmt = format!("{} {}", stmt, handle_conflict);
-
-        info!("{}", stmt);
-        let bulk_stmt = client.prepare(&stmt);
-
-        match bulk_stmt {
-            Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
-                msg: format!(
-                    "Error in preparing for the accounts update PostgreSQL database: {} host: {:?} user: {:?} config: {:?}",
-                    err, config.host, config.user, config
-                ),
-            }))),
-            Ok(update_account_stmt) => Ok(update_account_stmt),
-        }
-    }
-
-    fn build_single_account_upsert_statement(client: &mut Client, config: &GeyserPluginPostgresConfig) -> Result<Statement, GeyserPluginError> {
-        let stmt = "INSERT INTO account AS acct (pubkey, slot, owner, lamports, executable, rent_epoch, data, write_version, updated_on, txn_signature) \
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
-        ON CONFLICT (pubkey) DO UPDATE SET slot=excluded.slot, owner=excluded.owner, lamports=excluded.lamports, executable=excluded.executable, rent_epoch=excluded.rent_epoch, \
-        data=excluded.data, write_version=excluded.write_version, updated_on=excluded.updated_on, txn_signature=excluded.txn_signature  WHERE acct.slot < excluded.slot OR (\
-        acct.slot = excluded.slot AND acct.write_version < excluded.write_version)";
-
-        let stmt = client.prepare(stmt);
-
-        match stmt {
-            Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
-                msg: format!(
-                    "Error in preparing for the accounts update PostgreSQL database: {} host: {:?} user: {:?} config: {:?}",
-                    err, config.host, config.user, config
-                ),
-            }))),
-            Ok(update_account_stmt) => Ok(update_account_stmt),
         }
     }
 

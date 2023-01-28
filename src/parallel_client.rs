@@ -1,3 +1,4 @@
+use crate::abort;
 use crate::config::GeyserPluginPostgresConfig;
 use crate::parallel_client_worker::DbWorkItem;
 use crate::parallel_client_worker::LogTransactionRequest;
@@ -5,7 +6,6 @@ use crate::parallel_client_worker::PostgresClientWorker;
 use crate::parallel_client_worker::UpdateAccountRequest;
 use crate::parallel_client_worker::UpdateBlockMetadataRequest;
 use crate::parallel_client_worker::UpdateSlotRequest;
-use crate::postgres_client::abort;
 use crate::postgres_client::build_db_transaction;
 use crate::postgres_client::DbAccountInfo;
 use crate::postgres_client::DbBlockInfo;

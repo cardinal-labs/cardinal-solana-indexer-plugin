@@ -8,7 +8,64 @@ use solana_geyser_plugin_interface::geyser_plugin_interface::Result;
 use std::fs::File;
 use std::path::Path;
 
-/// The Configuration for the PostgreSQL plugin
+/// Config for the PostgreSQL plugin
+///
+/// # Format of the config file:
+/// * The `accounts_selector` section allows the user to controls accounts selections.
+/// "accounts_selector" : {
+///     "accounts" : \["pubkey-1", "pubkey-2", ..., "pubkey-n"\],
+/// }
+/// or:
+/// "accounts_selector" = {
+///     "owners" : \["pubkey-1", "pubkey-2", ..., "pubkey-m"\]
+/// }
+/// Accounts either satisyfing the accounts condition or owners condition will be selected.
+/// When only owners is specified,
+/// all accounts belonging to the owners will be streamed.
+/// The accounts field supports wildcard to select all accounts:
+/// "accounts_selector" : {
+///     "accounts" : \["*"\],
+/// }
+/// * "host", optional, specifies the PostgreSQL server.
+/// * "user", optional, specifies the PostgreSQL user.
+/// * "port", optional, specifies the PostgreSQL server's port.
+/// * "connection_str", optional, the custom PostgreSQL connection string.
+/// Please refer to https://docs.rs/postgres/0.19.2/postgres/config/struct.Config.html for the connection configuration.
+/// When `connection_str` is set, the values in "host", "user" and "port" are ignored. If `connection_str` is not given,
+/// `host` and `user` must be given.
+/// "store_account_historical_data", optional, set it to 'true', to store historical account data to account_audit
+/// table.
+/// * "threads" optional, specifies the number of worker threads for the plugin. A thread
+/// maintains a PostgreSQL connection to the server. The default is '10'.
+/// * "batch_size" optional, specifies the batch size of bulk insert when the AccountsDb is created
+/// from restoring a snapshot. The default is '10'.
+/// * "panic_on_db_errors", optional, contols if to panic when there are errors replicating data to the
+/// PostgreSQL database. The default is 'false'.
+/// * "transaction_selector", optional, controls if and what transaction to store. If this field is missing
+/// None of the transction is stored.
+/// "transaction_selector" : {
+///     "mentions" : \["pubkey-1", "pubkey-2", ..., "pubkey-n"\],
+/// }
+/// The `mentions` field support wildcard to select all transaction or all 'vote' transactions:
+/// For example, to select all transactions:
+/// "transaction_selector" : {
+///     "mentions" : \["*"\],
+/// }
+/// To select all vote transactions:
+/// "transaction_selector" : {
+///     "mentions" : \["all_votes"\],
+/// }
+/// # Examples
+///
+/// {
+///    "libpath": "/home/solana/target/release/libsolana_geyser_plugin_postgres.so",
+///    "host": "host_foo",
+///    "user": "solana",
+///    "threads": 10,
+///    "accounts_selector" : {
+///       "owners" : ["9oT9R5ZyRovSVnt37QvVoBttGpNqR3J7unkb567NP8k3"]
+///    }
+/// }
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GeyserPluginPostgresConfig {

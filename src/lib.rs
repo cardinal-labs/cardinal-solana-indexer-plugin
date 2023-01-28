@@ -24,3 +24,15 @@ pub unsafe extern "C" fn _create_plugin() -> *mut dyn GeyserPlugin {
     let plugin: Box<dyn GeyserPlugin> = Box::new(plugin);
     Box::into_raw(plugin)
 }
+
+pub(crate) fn abort() -> ! {
+    #[cfg(not(test))]
+    {
+        // standard error is usually redirected to a log file, cry for help on standard output as well
+        eprintln!("Validator process aborted by geyser plugin");
+        std::process::exit(1);
+    }
+
+    #[cfg(test)]
+    panic!("process::exit(1) is intercepted for friendly test failure...");
+}
