@@ -47,12 +47,7 @@ use tokio_postgres::types;
 /// memory usage. The downside -- calls after this threshold is reached can get blocked.
 const MAX_ASYNC_REQUESTS: usize = 40960;
 const SAFE_BATCH_STARTING_SLOT_CUSHION: u64 = 2 * 40960;
-const DEFAULT_POSTGRES_PORT: u16 = 5432;
-const DEFAULT_THREADS_COUNT: usize = 100;
-const DEFAULT_ACCOUNTS_INSERT_BATCH_SIZE: usize = 10;
 const ACCOUNT_COLUMN_COUNT: usize = 10;
-const DEFAULT_PANIC_ON_DB_ERROR: bool = false;
-const DEFAULT_STORE_ACCOUNT_HISTORICAL_DATA: bool = false;
 
 struct PostgresSqlClientWrapper {
     client: Client,
@@ -228,8 +223,6 @@ pub trait PostgresClient {
 
 impl SimplePostgresClient {
     pub fn connect_to_db(config: &GeyserPluginPostgresConfig) -> Result<Client, GeyserPluginError> {
-        let port = config.port.unwrap_or(DEFAULT_POSTGRES_PORT);
-
         let connection_str = if let Some(connection_str) = &config.connection_str {
             connection_str.clone()
         } else {
@@ -240,7 +233,7 @@ impl SimplePostgresClient {
                 );
                 return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConfigurationError { msg })));
             }
-            format!("host={} user={} port={}", config.host.as_ref().unwrap(), config.user.as_ref().unwrap(), port)
+            format!("host={} user={} port={}", config.host.as_ref().unwrap(), config.user.as_ref().unwrap(), config.port)
         };
 
         let result = if let Some(true) = config.use_ssl {
@@ -299,9 +292,8 @@ impl SimplePostgresClient {
     }
 
     fn build_bulk_account_insert_statement(client: &mut Client, config: &GeyserPluginPostgresConfig) -> Result<Statement, GeyserPluginError> {
-        let batch_size = config.batch_size.unwrap_or(DEFAULT_ACCOUNTS_INSERT_BATCH_SIZE);
         let mut stmt = String::from("INSERT INTO account AS acct (pubkey, slot, owner, lamports, executable, rent_epoch, data, write_version, updated_on, txn_signature) VALUES");
-        for j in 0..batch_size {
+        for j in 0..config.batch_size {
             let row = j * ACCOUNT_COLUMN_COUNT;
             let val_str = format!(
                 "(${}, ${}, ${}, ${}, ${}, ${}, ${}, ${}, ${}, ${})",
@@ -644,11 +636,9 @@ impl SimplePostgresClient {
         let update_transaction_log_stmt = Self::build_transaction_info_upsert_statement(&mut client, config)?;
         let update_block_metadata_stmt = Self::build_block_metadata_upsert_statement(&mut client, config)?;
 
-        let batch_size = config.batch_size.unwrap_or(DEFAULT_ACCOUNTS_INSERT_BATCH_SIZE);
+        let batch_size = config.batch_size;
 
-        let store_account_historical_data = config.store_account_historical_data.unwrap_or(DEFAULT_STORE_ACCOUNT_HISTORICAL_DATA);
-
-        let insert_account_audit_stmt = if store_account_historical_data {
+        let insert_account_audit_stmt = if config.store_account_historical_data {
             let stmt = Self::build_account_audit_insert_statement(&mut client, config)?;
             Some(stmt)
         } else {
@@ -902,7 +892,7 @@ impl ParallelPostgresClient {
         let mut workers = Vec::default();
         let is_startup_done = Arc::new(AtomicBool::new(false));
         let startup_done_count = Arc::new(AtomicUsize::new(0));
-        let worker_count = config.threads.unwrap_or(DEFAULT_THREADS_COUNT);
+        let worker_count = config.threads;
         let initialized_worker_count = Arc::new(AtomicUsize::new(0));
         for i in 0..worker_count {
             let cloned_receiver = receiver.clone();
@@ -914,7 +904,7 @@ impl ParallelPostgresClient {
             let worker = Builder::new()
                 .name(format!("worker-{}", i))
                 .spawn(move || -> Result<(), GeyserPluginError> {
-                    let panic_on_db_errors = *config.panic_on_db_errors.as_ref().unwrap_or(&DEFAULT_PANIC_ON_DB_ERROR);
+                    let panic_on_db_errors = config.panic_on_db_errors;
                     match PostgresClientWorker::new(config) {
                         Ok(mut worker) => {
                             initialized_worker_count_clone.fetch_add(1, Ordering::Relaxed);

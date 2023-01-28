@@ -10,6 +10,7 @@ use std::path::Path;
 
 /// The Configuration for the PostgreSQL plugin
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct GeyserPluginPostgresConfig {
     /// The host name or IP of the PostgreSQL server
     pub host: Option<String>,
@@ -18,7 +19,7 @@ pub struct GeyserPluginPostgresConfig {
     pub user: Option<String>,
 
     /// The port number of the PostgreSQL database, the default is 5432
-    pub port: Option<u16>,
+    pub port: u16,
 
     /// The connection string of PostgreSQL database, if this is set
     /// `host`, `user` and `port` will be ignored.
@@ -33,18 +34,18 @@ pub struct GeyserPluginPostgresConfig {
 
     /// Controls the number of threads establishing connections to
     /// the PostgreSQL server. The default is 10.
-    pub threads: Option<usize>,
+    pub threads: usize,
 
     /// Controls the batch size when bulk loading accounts.
     /// The default is 10.
-    pub batch_size: Option<usize>,
+    pub batch_size: usize,
 
     /// Controls whether to panic the validator in case of errors
     /// writing to PostgreSQL server. The default is false
-    pub panic_on_db_errors: Option<bool>,
+    pub panic_on_db_errors: bool,
 
     /// Indicates whether to store historical data for accounts
-    pub store_account_historical_data: Option<bool>,
+    pub store_account_historical_data: bool,
 
     /// Controls whether to use SSL based connection to the database server.
     /// The default is false
@@ -67,8 +68,31 @@ pub struct GeyserPluginPostgresConfig {
 
     /// Controls if this plugin can read the database on_load() to find heighest slot
     /// and ignore upsert accounts (at_startup) that should already exist in DB
-    #[serde(default)]
     pub skip_upsert_existing_accounts_at_startup: bool,
+}
+
+impl Default for GeyserPluginPostgresConfig {
+    fn default() -> Self {
+        Self {
+            host: None,
+            port: 5432,
+            user: None,
+            connection_str: None,
+            accounts_selector: None,
+            transaction_selector: None,
+            threads: 10,
+            batch_size: 10,
+            panic_on_db_errors: false,
+            store_account_historical_data: false,
+            use_ssl: None,
+            server_ca: None,
+            client_cert: None,
+            client_key: None,
+            index_token_owner: None,
+            index_token_mint: None,
+            skip_upsert_existing_accounts_at_startup: false,
+        }
+    }
 }
 
 impl GeyserPluginPostgresConfig {

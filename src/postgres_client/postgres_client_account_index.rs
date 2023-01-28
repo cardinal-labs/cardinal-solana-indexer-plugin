@@ -1,7 +1,6 @@
 use super::DbAccountInfo;
 use super::ReadableAccountInfo;
 use super::SimplePostgresClient;
-use super::DEFAULT_ACCOUNTS_INSERT_BATCH_SIZE;
 use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
 use crate::inline_spl_token::GenericTokenAccount;
@@ -53,9 +52,8 @@ impl SimplePostgresClient {
 
     /// Common build the token mint index bulk insert statement.
     pub fn build_bulk_token_index_insert_statement_common(client: &mut Client, table: &str, source_key_name: &str, config: &GeyserPluginPostgresConfig) -> Result<Statement, GeyserPluginError> {
-        let batch_size = config.batch_size.unwrap_or(DEFAULT_ACCOUNTS_INSERT_BATCH_SIZE);
         let mut stmt = format!("INSERT INTO {} AS index ({}, account_key, slot) VALUES", table, source_key_name);
-        for j in 0..batch_size {
+        for j in 0..config.batch_size {
             let row = j * TOKEN_INDEX_COLUMN_COUNT;
             let val_str = format!("(${}, ${}, ${})", row + 1, row + 2, row + 3);
 
