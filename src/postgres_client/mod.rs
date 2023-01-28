@@ -9,7 +9,6 @@ mod postgres_client_transaction;
 use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
 use crate::parallel_client::ParallelPostgresClient;
-use crate::postgres_client::postgres_client_account_index::ACCOUNT_COLUMN_COUNT;
 use chrono::Utc;
 use log::*;
 use openssl::ssl::SslConnector;
@@ -26,7 +25,6 @@ use solana_metrics::*;
 use std::collections::HashSet;
 use std::sync::Mutex;
 use std::thread::{self};
-use tokio_postgres::types;
 
 pub use self::postgres_client_account_index::DbAccountInfo;
 pub use self::postgres_client_account_index::ReadableAccountInfo;
@@ -209,121 +207,6 @@ impl SimplePostgresClient {
             let msg = format!("Failed to persist the insert of account_audit to the PostgreSQL database. Error: {:?}", err);
             error!("{}", msg);
             return Err(GeyserPluginError::AccountsUpdateError { msg });
-        }
-        Ok(())
-    }
-
-    /// Internal function for updating or inserting a single account
-    fn upsert_account_internal(
-        account: &DbAccountInfo,
-        statement: &Statement,
-        client: &mut Client,
-        insert_account_audit_stmt: &Option<Statement>,
-        insert_token_owner_index_stmt: &Option<Statement>,
-        insert_token_mint_index_stmt: &Option<Statement>,
-    ) -> Result<(), GeyserPluginError> {
-        let lamports = account.lamports() as i64;
-        let rent_epoch = account.rent_epoch() as i64;
-        let updated_on = Utc::now().naive_utc();
-        let result = client.execute(
-            statement,
-            &[
-                &account.pubkey(),
-                &account.slot,
-                &account.owner(),
-                &lamports,
-                &account.executable(),
-                &rent_epoch,
-                &account.data(),
-                &account.write_version(),
-                &updated_on,
-                &account.txn_signature(),
-            ],
-        );
-
-        if let Err(err) = result {
-            let msg = format!("Failed to persist the update of account to the PostgreSQL database. Error: {:?}", err);
-            error!("{}", msg);
-            return Err(GeyserPluginError::AccountsUpdateError { msg });
-        } else if result.unwrap() == 0 && insert_account_audit_stmt.is_some() {
-            // If no records modified (inserted or updated), it is because the account is updated
-            // at an older slot, insert the record directly into the account_audit table.
-            let statement = insert_account_audit_stmt.as_ref().unwrap();
-            Self::insert_account_audit(account, statement, client)?;
-        }
-
-        if let Some(insert_token_owner_index_stmt) = insert_token_owner_index_stmt {
-            Self::update_token_owner_index(client, insert_token_owner_index_stmt, account)?;
-        }
-
-        if let Some(insert_token_mint_index_stmt) = insert_token_mint_index_stmt {
-            Self::update_token_mint_index(client, insert_token_mint_index_stmt, account)?;
-        }
-
-        Ok(())
-    }
-
-    /// Update or insert a single account
-    fn upsert_account(&mut self, account: &DbAccountInfo) -> Result<(), GeyserPluginError> {
-        let client = self.client.get_mut().unwrap();
-        let insert_account_audit_stmt = &client.insert_account_audit_stmt;
-        let statement = &client.update_account_stmt;
-        let insert_token_owner_index_stmt = &client.insert_token_owner_index_stmt;
-        let insert_token_mint_index_stmt = &client.insert_token_mint_index_stmt;
-        let client = &mut client.client;
-        Self::upsert_account_internal(account, statement, client, insert_account_audit_stmt, insert_token_owner_index_stmt, insert_token_mint_index_stmt)?;
-
-        Ok(())
-    }
-
-    /// Insert accounts in batch to reduce network overhead
-    fn insert_accounts_in_batch(&mut self, account: DbAccountInfo) -> Result<(), GeyserPluginError> {
-        self.queue_secondary_indexes(&account);
-        self.pending_account_updates.push(account);
-
-        self.bulk_insert_accounts()?;
-        self.bulk_insert_token_owner_index()?;
-        self.bulk_insert_token_mint_index()
-    }
-
-    fn bulk_insert_accounts(&mut self) -> Result<(), GeyserPluginError> {
-        if self.pending_account_updates.len() == self.batch_size {
-            let mut measure = Measure::start("geyser-plugin-postgres-prepare-values");
-
-            let mut values: Vec<&(dyn types::ToSql + Sync)> = Vec::with_capacity(self.batch_size * ACCOUNT_COLUMN_COUNT);
-            let updated_on = Utc::now().naive_utc();
-            for j in 0..self.batch_size {
-                let account = &self.pending_account_updates[j];
-
-                values.push(&account.pubkey);
-                values.push(&account.slot);
-                values.push(&account.owner);
-                values.push(&account.lamports);
-                values.push(&account.executable);
-                values.push(&account.rent_epoch);
-                values.push(&account.data);
-                values.push(&account.write_version);
-                values.push(&updated_on);
-                values.push(&account.txn_signature);
-            }
-            measure.stop();
-            inc_new_counter_debug!("geyser-plugin-postgres-prepare-values-us", measure.as_us() as usize, 10000, 10000);
-
-            let mut measure = Measure::start("geyser-plugin-postgres-update-account");
-            let client = self.client.get_mut().unwrap();
-            let result = client.client.query(&client.bulk_account_insert_stmt, &values);
-
-            self.pending_account_updates.clear();
-
-            if let Err(err) = result {
-                let msg = format!("Failed to persist the update of account to the PostgreSQL database. Error: {:?}", err);
-                error!("{}", msg);
-                return Err(GeyserPluginError::AccountsUpdateError { msg });
-            }
-
-            measure.stop();
-            inc_new_counter_debug!("geyser-plugin-postgres-update-account-us", measure.as_us() as usize, 10000, 10000);
-            inc_new_counter_debug!("geyser-plugin-postgres-update-account-count", self.batch_size, 10000, 10000);
         }
         Ok(())
     }
