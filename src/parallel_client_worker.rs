@@ -76,7 +76,7 @@ impl PostgresClientWorker {
                         }
                     }
                     DbWorkItem::LogTransaction(transaction_log_info) => {
-                        if let Err(err) = self.client.log_transaction(*transaction_log_info) {
+                        if let Err(err) = self.client.log_transaction(transaction_log_info.transaction_info) {
                             error!("Failed to update transaction: ({})", err);
                             if panic_on_db_errors {
                                 abort();
@@ -84,7 +84,7 @@ impl PostgresClientWorker {
                         }
                     }
                     DbWorkItem::UpdateBlockMetadata(block_info) => {
-                        if let Err(err) = self.client.update_block_metadata(*block_info) {
+                        if let Err(err) = self.client.update_block_metadata(block_info.block_info) {
                             error!("Failed to update block metadata: ({})", err);
                             if panic_on_db_errors {
                                 abort();

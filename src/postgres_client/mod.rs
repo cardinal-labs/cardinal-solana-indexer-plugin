@@ -218,9 +218,9 @@ pub trait PostgresClient {
 
     fn notify_end_of_startup(&mut self) -> Result<(), GeyserPluginError>;
 
-    fn log_transaction(&mut self, transaction_log_info: LogTransactionRequest) -> Result<(), GeyserPluginError>;
+    fn log_transaction(&mut self, transaction_info: DbTransaction) -> Result<(), GeyserPluginError>;
 
-    fn update_block_metadata(&mut self, block_info: UpdateBlockMetadataRequest) -> Result<(), GeyserPluginError>;
+    fn update_block_metadata(&mut self, block_info: DbBlockInfo) -> Result<(), GeyserPluginError>;
 }
 
 impl SimplePostgresClient {
@@ -754,11 +754,11 @@ impl PostgresClient for SimplePostgresClient {
         self.flush_buffered_writes()
     }
 
-    fn log_transaction(&mut self, transaction_log_info: LogTransactionRequest) -> Result<(), GeyserPluginError> {
-        self.log_transaction_impl(transaction_log_info)
+    fn log_transaction(&mut self, transaction_info: DbTransaction) -> Result<(), GeyserPluginError> {
+        self.log_transaction_impl(transaction_info)
     }
 
-    fn update_block_metadata(&mut self, block_info: UpdateBlockMetadataRequest) -> Result<(), GeyserPluginError> {
+    fn update_block_metadata(&mut self, block_info: DbBlockInfo) -> Result<(), GeyserPluginError> {
         self.update_block_metadata_impl(block_info)
     }
 }

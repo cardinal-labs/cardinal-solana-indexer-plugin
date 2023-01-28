@@ -8,6 +8,8 @@ use postgres::Client;
 use postgres::Statement;
 use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
 
+use super::DbBlockInfo;
+
 impl SimplePostgresClient {
     pub(crate) fn build_block_metadata_upsert_statement(client: &mut Client, config: &GeyserPluginPostgresConfig) -> Result<Statement, GeyserPluginError> {
         let stmt = "INSERT INTO block (slot, blockhash, rewards, block_time, block_height, updated_on) \
@@ -28,13 +30,12 @@ impl SimplePostgresClient {
         }
     }
 
-    pub(crate) fn update_block_metadata_impl(&mut self, block_info: UpdateBlockMetadataRequest) -> Result<(), GeyserPluginError> {
+    pub(crate) fn update_block_metadata_impl(&mut self, block_info: DbBlockInfo) -> Result<(), GeyserPluginError> {
         let client = self.client.get_mut().unwrap();
         let statement = &client.update_block_metadata_stmt;
         let client = &mut client.client;
         let updated_on = Utc::now().naive_utc();
 
-        let block_info = block_info.block_info;
         let result = client.query(
             statement,
             &[
