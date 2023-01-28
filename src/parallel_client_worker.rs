@@ -127,7 +127,7 @@ impl PostgresClientWorker {
                         continue;
                     }
                     _ => {
-                        error!("Error in receiving the item {:?}", err);
+                        error!("[error] {:?} {:?}", err, panic_on_db_errors);
                         if panic_on_db_errors {
                             abort();
                         }

@@ -48,7 +48,7 @@ pub struct ParallelPostgresClient {
 
 impl ParallelPostgresClient {
     pub fn new(config: &GeyserPluginPostgresConfig) -> Result<Self, GeyserPluginError> {
-        info!("[ParallelPostgresClient]");
+        info!("[ParallelPostgresClient] config=[{:?}]", config);
         let (sender, receiver) = bounded(MAX_ASYNC_REQUESTS);
         let exit_worker = Arc::new(AtomicBool::new(false));
         let mut workers = Vec::default();
@@ -117,10 +117,10 @@ impl ParallelPostgresClient {
     }
 
     pub fn update_account(&mut self, account: &ReplicaAccountInfo, slot: u64, is_startup: bool) -> Result<(), GeyserPluginError> {
-        if !is_startup && account.txn_signature().is_none() {
-            // we are not interested in accountsdb internal bookeeping updates
-            return Ok(());
-        }
+        // we are not interested in accountsdb internal bookeeping updates
+        // if !is_startup && account.txn_signature().is_none() {
+        //     return Ok(());
+        // }
 
         if self.last_report.should_update(30000) {
             datapoint_debug!("postgres-plugin-stats", ("message-queue-length", self.sender.len() as i64, i64),);

@@ -96,9 +96,9 @@ fn test_plugin() {
         )
         .unwrap();
 
-    let mut client = SimplePostgresClient::connect_to_db(&geyser_plugin.config.expect("No plugin config found")).expect("Failed to connect");
+    let mut client = SimplePostgresClient::connect_to_db(&geyser_plugin.config.clone().expect("No plugin config found")).expect("Failed to connect");
     let rows = client.query("SELECT * from account", &[]).expect("Error selecting accounts");
-    assert!(rows.len() == 1, "Incorrect rows found");
+    assert!(rows.len() == 1, "Incorrect number of rows found");
     let first_row = rows.first().expect("No results found");
 
     let pubkey: Vec<u8> = first_row.get("pubkey");
@@ -113,4 +113,5 @@ fn test_plugin() {
         "Incorrect pubkey"
     );
     client.close().expect("Error disconnecting");
+    geyser_plugin.on_unload();
 }

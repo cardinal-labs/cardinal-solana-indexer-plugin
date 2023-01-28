@@ -161,7 +161,6 @@ impl SimplePostgresClient {
 
         stmt = format!("{} {}", stmt, handle_conflict);
 
-        info!("{}", stmt);
         let bulk_stmt = client.prepare(&stmt);
 
         match bulk_stmt {

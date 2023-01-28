@@ -77,7 +77,7 @@ pub trait PostgresClient {
 
 impl SimplePostgresClient {
     pub fn new(config: &GeyserPluginPostgresConfig) -> Result<Self, GeyserPluginError> {
-        info!("Creating SimplePostgresClient...");
+        info!("[SimplePostgresClient] creating");
         let mut client = Self::connect_to_db(config)?;
         let bulk_account_insert_stmt = Self::build_bulk_account_insert_statement(&mut client, config)?;
         let update_account_stmt = Self::build_single_account_upsert_statement(&mut client, config)?;
@@ -122,7 +122,7 @@ impl SimplePostgresClient {
             None
         };
 
-        info!("Created SimplePostgresClient.");
+        info!("[SimplePostgresClient] created");
         Ok(Self {
             batch_size,
             pending_account_updates: Vec::with_capacity(batch_size),
