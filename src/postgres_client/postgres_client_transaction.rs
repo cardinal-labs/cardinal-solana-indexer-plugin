@@ -1,6 +1,5 @@
 use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
-use crate::postgres_client::ParallelPostgresClient;
 use crate::postgres_client::SimplePostgresClient;
 use chrono::Utc;
 use log::*;
@@ -23,8 +22,6 @@ use solana_transaction_status::InnerInstructions;
 use solana_transaction_status::Reward;
 use solana_transaction_status::TransactionStatusMeta;
 use solana_transaction_status::TransactionTokenBalance;
-
-use super::LogTransactionRequest;
 
 const MAX_TRANSACTION_STATUS_LEN: usize = 256;
 
@@ -476,14 +473,6 @@ impl SimplePostgresClient {
         }
 
         Ok(())
-    }
-}
-
-impl ParallelPostgresClient {
-    pub fn build_transaction_request(slot: u64, transaction_info: &ReplicaTransactionInfo, transaction_write_version: u64) -> LogTransactionRequest {
-        LogTransactionRequest {
-            transaction_info: build_db_transaction(slot, transaction_info, transaction_write_version),
-        }
     }
 }
 

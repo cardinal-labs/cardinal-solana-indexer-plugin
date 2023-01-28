@@ -18,8 +18,6 @@ use postgres::NoTls;
 use postgres::Statement;
 use postgres_openssl::MakeTlsConnector;
 use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
-use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfo;
-use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaBlockInfo;
 use solana_geyser_plugin_interface::geyser_plugin_interface::SlotStatus;
 use solana_measure::measure::Measure;
 use solana_metrics::*;
@@ -28,8 +26,11 @@ use std::sync::Mutex;
 use std::thread::{self};
 use tokio_postgres::types;
 
-use self::postgres_client_transaction::DbReward;
-use self::postgres_client_transaction::DbTransaction;
+pub use self::postgres_client_account_index::DbAccountInfo;
+pub use self::postgres_client_account_index::ReadableAccountInfo;
+pub use self::postgres_client_block_metadata::DbBlockInfo;
+pub use self::postgres_client_transaction::build_db_transaction;
+pub use self::postgres_client_transaction::DbTransaction;
 
 /// The maximum asynchronous requests allowed in the channel to avoid excessive
 /// memory usage. The downside -- calls after this threshold is reached can get blocked.
@@ -62,21 +63,6 @@ pub struct SimplePostgresClient {
     client: Mutex<PostgresSqlClientWrapper>,
 }
 
-impl Eq for DbAccountInfo {}
-
-#[derive(Clone, PartialEq, Debug)]
-pub struct DbAccountInfo {
-    pub pubkey: Vec<u8>,
-    pub lamports: i64,
-    pub owner: Vec<u8>,
-    pub executable: bool,
-    pub rent_epoch: i64,
-    pub data: Vec<u8>,
-    pub slot: i64,
-    pub write_version: i64,
-    pub txn_signature: Option<Vec<u8>>,
-}
-
 pub(crate) fn abort() -> ! {
     #[cfg(not(test))]
     {
@@ -87,123 +73,6 @@ pub(crate) fn abort() -> ! {
 
     #[cfg(test)]
     panic!("process::exit(1) is intercepted for friendly test failure...");
-}
-
-impl DbAccountInfo {
-    pub fn new<T: ReadableAccountInfo>(account: &T, slot: u64) -> DbAccountInfo {
-        let data = account.data().to_vec();
-        Self {
-            pubkey: account.pubkey().to_vec(),
-            lamports: account.lamports() as i64,
-            owner: account.owner().to_vec(),
-            executable: account.executable(),
-            rent_epoch: account.rent_epoch() as i64,
-            data,
-            slot: slot as i64,
-            write_version: account.write_version(),
-            txn_signature: account.txn_signature().map(|v| v.to_vec()),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct DbBlockInfo {
-    pub slot: i64,
-    pub blockhash: String,
-    pub rewards: Vec<DbReward>,
-    pub block_time: Option<i64>,
-    pub block_height: Option<i64>,
-}
-
-impl<'a> From<&ReplicaBlockInfo<'a>> for DbBlockInfo {
-    fn from(block_info: &ReplicaBlockInfo) -> Self {
-        Self {
-            slot: block_info.slot as i64,
-            blockhash: block_info.blockhash.to_string(),
-            rewards: block_info.rewards.iter().map(DbReward::from).collect(),
-            block_time: block_info.block_time,
-            block_height: block_info.block_height.map(|block_height| block_height as i64),
-        }
-    }
-}
-
-pub trait ReadableAccountInfo: Sized {
-    fn pubkey(&self) -> &[u8];
-    fn owner(&self) -> &[u8];
-    fn lamports(&self) -> i64;
-    fn executable(&self) -> bool;
-    fn rent_epoch(&self) -> i64;
-    fn data(&self) -> &[u8];
-    fn write_version(&self) -> i64;
-    fn txn_signature(&self) -> Option<&[u8]>;
-}
-
-impl ReadableAccountInfo for DbAccountInfo {
-    fn pubkey(&self) -> &[u8] {
-        &self.pubkey
-    }
-
-    fn owner(&self) -> &[u8] {
-        &self.owner
-    }
-
-    fn lamports(&self) -> i64 {
-        self.lamports
-    }
-
-    fn executable(&self) -> bool {
-        self.executable
-    }
-
-    fn rent_epoch(&self) -> i64 {
-        self.rent_epoch
-    }
-
-    fn data(&self) -> &[u8] {
-        &self.data
-    }
-
-    fn write_version(&self) -> i64 {
-        self.write_version
-    }
-
-    fn txn_signature(&self) -> Option<&[u8]> {
-        self.txn_signature.as_deref()
-    }
-}
-
-impl<'a> ReadableAccountInfo for ReplicaAccountInfo<'a> {
-    fn pubkey(&self) -> &[u8] {
-        self.pubkey
-    }
-
-    fn owner(&self) -> &[u8] {
-        self.owner
-    }
-
-    fn lamports(&self) -> i64 {
-        self.lamports as i64
-    }
-
-    fn executable(&self) -> bool {
-        self.executable
-    }
-
-    fn rent_epoch(&self) -> i64 {
-        self.rent_epoch as i64
-    }
-
-    fn data(&self) -> &[u8] {
-        self.data
-    }
-
-    fn write_version(&self) -> i64 {
-        self.write_version as i64
-    }
-
-    fn txn_signature(&self) -> Option<&[u8]> {
-        None
-    }
 }
 
 pub trait PostgresClient {
