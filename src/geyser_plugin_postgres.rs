@@ -97,11 +97,11 @@ pub struct GeyserPluginPostgresConfig {
     /// Controls whether to index the token owners. The default is false
     pub index_token_owner: Option<bool>,
 
-    /// Controls whetherf to index the token mints. The default is false
+    /// Controls whether to index the token mints. The default is false
     pub index_token_mint: Option<bool>,
 
     /// Controls if this plugin can read the database on_load() to find heighest slot
-    /// and ignore upsetr accounts (at_startup) that should already exist in DB
+    /// and ignore upsert accounts (at_startup) that should already exist in DB
     #[serde(default)]
     pub skip_upsert_existing_accounts_at_startup: bool,
 }
@@ -117,9 +117,9 @@ pub enum GeyserPluginPostgresError {
 }
 
 fn client_err() -> Result<()> {
-    return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConnectionError {
+    Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConnectionError {
         msg: "Client not connected.".to_string(),
-    })));
+    })))
 }
 
 impl GeyserPlugin for GeyserPluginPostgres {
@@ -196,24 +196,17 @@ impl GeyserPlugin for GeyserPluginPostgres {
         let config: GeyserPluginPostgresConfig = serde_json::from_str(&contents).map_err(|err| GeyserPluginError::ConfigFileReadError {
             msg: format!("[error] failed to parse config {:?}", err),
         })?;
-        self.accounts_selector = match &config.accounts_selector {
-            Some(c) => Some(AccountsSelector::new(c)),
-            None => None,
-        };
-        self.transaction_selector = match &config.transaction_selector {
-            Some(c) => Some(TransactionSelector::new(c)),
-            None => None,
-        };
-
         let (client, batch_optimize_by_skiping_older_slots) = PostgresClientBuilder::build_pararallel_postgres_client(&config)?;
         self.client = Some(client);
-        self.config = Some(config);
         self.batch_starting_slot = batch_optimize_by_skiping_older_slots;
+        self.accounts_selector = config.accounts_selector.as_ref().map(AccountsSelector::new);
+        self.transaction_selector = config.transaction_selector.as_ref().map(TransactionSelector::new);
+        self.config = Some(config);
         Ok(())
     }
 
     fn on_unload(&mut self) {
-        info!("[on_unload] name=[{:?}]", self.name());
+        info!("[on_unload]");
         match &mut self.client {
             None => {}
             Some(client) => {
@@ -223,6 +216,7 @@ impl GeyserPlugin for GeyserPluginPostgres {
     }
 
     fn update_account(&mut self, account: ReplicaAccountInfoVersions, slot: u64, is_startup: bool) -> Result<()> {
+        info!("[update_account]");
         // skip updating account on startup of batch_optimize_by_skiping_older_slots is configured
         if is_startup && self.batch_starting_slot.map(|slot_limit| slot < slot_limit).unwrap_or(false) {
             return Ok(());
@@ -280,9 +274,7 @@ impl GeyserPlugin for GeyserPluginPostgres {
             Some(client) => client,
             None => return client_err(),
         };
-
-        let result = client.update_slot_status(slot, parent, status);
-        if let Err(err) = result {
+        if let Err(err) = client.update_slot_status(slot, parent, status) {
             return Err(GeyserPluginError::SlotStatusUpdateError {
                 msg: format!("Failed to persist the update of slot to the PostgreSQL database. Error: {:?}", err),
             });
@@ -303,7 +295,6 @@ impl GeyserPlugin for GeyserPluginPostgres {
                 msg: format!("Failed to notify the end of startup for accounts notifications. Error: {:?}", err),
             });
         }
-
         Ok(())
     }
 
