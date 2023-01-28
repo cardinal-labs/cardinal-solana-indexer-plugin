@@ -1,9 +1,12 @@
-use crate::{config::GeyserPluginPostgresConfig, geyser_plugin_postgres::GeyserPluginPostgresError};
+use crate::config::GeyserPluginPostgresConfig;
+use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
 
 use super::SimplePostgresClient;
 use log::info;
-use postgres::{Client, Statement};
-use solana_geyser_plugin_interface::geyser_plugin_interface::{GeyserPluginError, ReplicaAccountInfo};
+use postgres::Client;
+use postgres::Statement;
+use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
+use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfo;
 
 pub const ACCOUNT_COLUMN_COUNT: usize = 10;
 
