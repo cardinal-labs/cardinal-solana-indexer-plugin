@@ -4,7 +4,7 @@ mod postgres_client_account_index;
 mod postgres_client_block_metadata;
 mod postgres_client_transaction;
 
-use crate::geyser_plugin_postgres::GeyserPluginPostgresConfig;
+use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
 use crate::postgres_client::postgres_client_account_index::TokenSecondaryIndexEntry;
 use chrono::Utc;

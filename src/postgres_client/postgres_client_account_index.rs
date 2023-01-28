@@ -2,7 +2,7 @@ use super::DbAccountInfo;
 use super::ReadableAccountInfo;
 use super::SimplePostgresClient;
 use super::DEFAULT_ACCOUNTS_INSERT_BATCH_SIZE;
-use crate::geyser_plugin_postgres::GeyserPluginPostgresConfig;
+use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
 use crate::inline_spl_token::GenericTokenAccount;
 use crate::inline_spl_token::{self};

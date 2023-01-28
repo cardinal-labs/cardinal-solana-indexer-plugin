@@ -1,4 +1,4 @@
-use crate::geyser_plugin_postgres::GeyserPluginPostgresConfig;
+use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
 use crate::postgres_client::postgres_client_transaction::DbReward;
 use crate::postgres_client::SimplePostgresClient;
