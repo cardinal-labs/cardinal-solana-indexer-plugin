@@ -47,7 +47,7 @@ fn load_test_plugin() -> GeyserPluginPostgres {
         "{}",
         json!({
             "libpath": lib_path,
-            "connection_str": "host=localhost user=postgres password=postgres port=5432",
+            "connection_str": "host=localhost user=solana password=solana port=5432",
             "threads": 20,
             "batch_size": 20,
             "panic_on_db_errors": true,
