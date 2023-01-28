@@ -1,8 +1,3 @@
-#!/usr/bin/env bash
-
-# Source:
-# https://github.com/solana-labs/solana-accountsdb-plugin-postgres/blob/master/ci/rust-version.sh
-
 #
 # This file maintains the rust versions for use by CI.
 #
@@ -23,7 +18,7 @@
 if [[ -n $RUST_STABLE_VERSION ]]; then
   stable_version="$RUST_STABLE_VERSION"
 else
-  stable_version=1.59.0
+  stable_version=1.60.0
 fi
 
 if [[ -n $RUST_NIGHTLY_VERSION ]]; then
@@ -40,6 +35,7 @@ export rust_nightly=nightly-"$nightly_version"
 export rust_nightly_docker_image=solanalabs/rust-nightly:"$nightly_version"
 
 [[ -z $1 ]] || (
+
   rustup_install() {
     declare toolchain=$1
     if ! cargo +"$toolchain" -V > /dev/null; then
@@ -53,14 +49,14 @@ export rust_nightly_docker_image=solanalabs/rust-nightly:"$nightly_version"
   cd "$(dirname "${BASH_SOURCE[0]}")"
   case $1 in
   stable)
-    rustup_install "$rust_stable"
-    ;;
-  nightly)
-    rustup_install "$rust_nightly"
-    ;;
+     rustup_install "$rust_stable"
+     ;;
+  # nightly)
+  #    rustup_install "$rust_nightly"
+  #   ;;
   all)
-    rustup_install "$rust_stable"
-    rustup_install "$rust_nightly"
+     rustup_install "$rust_stable"
+     rustup_install "$rust_nightly"
     ;;
   *)
     echo "$0: Note: ignoring unknown argument: $1" >&2
