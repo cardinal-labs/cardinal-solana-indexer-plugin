@@ -1,0 +1,188 @@
+use crate::config::GeyserPluginPostgresConfig;
+use crate::parallel_client_worker::DbWorkItem;
+use crate::parallel_client_worker::PostgresClientWorker;
+use crate::postgres_client::abort;
+use crate::postgres_client::DbAccountInfo;
+use crate::postgres_client::DbBlockInfo;
+use crate::postgres_client::ReadableAccountInfo;
+use crate::postgres_client::UpdateAccountRequest;
+use crate::postgres_client::UpdateBlockMetadataRequest;
+use crate::postgres_client::UpdateSlotRequest;
+use crossbeam_channel::bounded;
+use crossbeam_channel::Sender;
+use log::*;
+use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
+use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfo;
+use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaBlockInfo;
+use solana_geyser_plugin_interface::geyser_plugin_interface::SlotStatus;
+use solana_measure::measure::Measure;
+use solana_metrics::*;
+use solana_sdk::timing::AtomicInterval;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::thread::sleep;
+use std::thread::Builder;
+use std::thread::JoinHandle;
+use std::thread::{self};
+use std::time::Duration;
+
+const MAX_ASYNC_REQUESTS: usize = 40960;
+
+#[warn(clippy::large_enum_variant)]
+pub struct ParallelPostgresClient {
+    workers: Vec<JoinHandle<Result<(), GeyserPluginError>>>,
+    exit_worker: Arc<AtomicBool>,
+    is_startup_done: Arc<AtomicBool>,
+    startup_done_count: Arc<AtomicUsize>,
+    initialized_worker_count: Arc<AtomicUsize>,
+    pub sender: Sender<DbWorkItem>,
+    last_report: AtomicInterval,
+    pub transaction_write_version: AtomicU64,
+}
+
+impl ParallelPostgresClient {
+    pub fn new(config: &GeyserPluginPostgresConfig) -> Result<Self, GeyserPluginError> {
+        info!("[ParallelPostgresClient]");
+        let (sender, receiver) = bounded(MAX_ASYNC_REQUESTS);
+        let exit_worker = Arc::new(AtomicBool::new(false));
+        let mut workers = Vec::default();
+        let is_startup_done = Arc::new(AtomicBool::new(false));
+        let startup_done_count = Arc::new(AtomicUsize::new(0));
+        let worker_count = config.threads;
+        let initialized_worker_count = Arc::new(AtomicUsize::new(0));
+        for i in 0..worker_count {
+            let cloned_receiver = receiver.clone();
+            let exit_clone = exit_worker.clone();
+            let is_startup_done_clone = is_startup_done.clone();
+            let startup_done_count_clone = startup_done_count.clone();
+            let initialized_worker_count_clone = initialized_worker_count.clone();
+            let config = config.clone();
+            let worker = Builder::new()
+                .name(format!("worker-{}", i))
+                .spawn(move || -> Result<(), GeyserPluginError> {
+                    let panic_on_db_errors = config.panic_on_db_errors;
+                    match PostgresClientWorker::new(config) {
+                        Ok(mut worker) => {
+                            initialized_worker_count_clone.fetch_add(1, Ordering::Relaxed);
+                            worker.do_work(cloned_receiver, exit_clone, is_startup_done_clone, startup_done_count_clone, panic_on_db_errors)?;
+                            Ok(())
+                        }
+                        Err(err) => {
+                            error!("Error when making connection to database: ({})", err);
+                            if panic_on_db_errors {
+                                abort();
+                            }
+                            Err(err)
+                        }
+                    }
+                })
+                .unwrap();
+
+            workers.push(worker);
+        }
+
+        Ok(Self {
+            last_report: AtomicInterval::default(),
+            workers,
+            exit_worker,
+            is_startup_done,
+            startup_done_count,
+            initialized_worker_count,
+            sender,
+            transaction_write_version: AtomicU64::default(),
+        })
+    }
+
+    pub fn join(&mut self) -> thread::Result<()> {
+        self.exit_worker.store(true, Ordering::Relaxed);
+        while !self.workers.is_empty() {
+            let worker = self.workers.pop();
+            if worker.is_none() {
+                break;
+            }
+            let worker = worker.unwrap();
+            let result = worker.join().unwrap();
+            if result.is_err() {
+                error!("The worker thread has failed: {:?}", result);
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn update_account(&mut self, account: &ReplicaAccountInfo, slot: u64, is_startup: bool) -> Result<(), GeyserPluginError> {
+        if !is_startup && account.txn_signature().is_none() {
+            // we are not interested in accountsdb internal bookeeping updates
+            return Ok(());
+        }
+
+        if self.last_report.should_update(30000) {
+            datapoint_debug!("postgres-plugin-stats", ("message-queue-length", self.sender.len() as i64, i64),);
+        }
+        let mut measure = Measure::start("geyser-plugin-posgres-create-work-item");
+        let wrk_item = DbWorkItem::UpdateAccount(Box::new(UpdateAccountRequest {
+            account: DbAccountInfo::new(account, slot),
+            is_startup,
+        }));
+
+        measure.stop();
+
+        inc_new_counter_debug!("geyser-plugin-posgres-create-work-item-us", measure.as_us() as usize, 100000, 100000);
+
+        let mut measure = Measure::start("geyser-plugin-posgres-send-msg");
+
+        if let Err(err) = self.sender.send(wrk_item) {
+            return Err(GeyserPluginError::AccountsUpdateError {
+                msg: format!("Failed to update the account {:?}, error: {:?}", bs58::encode(account.pubkey()).into_string(), err),
+            });
+        }
+
+        measure.stop();
+        inc_new_counter_debug!("geyser-plugin-posgres-send-msg-us", measure.as_us() as usize, 100000, 100000);
+
+        Ok(())
+    }
+
+    pub fn update_slot_status(&mut self, slot: u64, parent: Option<u64>, status: SlotStatus) -> Result<(), GeyserPluginError> {
+        if let Err(err) = self.sender.send(DbWorkItem::UpdateSlot(Box::new(UpdateSlotRequest { slot, parent, slot_status: status }))) {
+            return Err(GeyserPluginError::SlotStatusUpdateError {
+                msg: format!("Failed to update the slot {:?}, error: {:?}", slot, err),
+            });
+        }
+        Ok(())
+    }
+
+    pub fn update_block_metadata(&mut self, block_info: &ReplicaBlockInfo) -> Result<(), GeyserPluginError> {
+        if let Err(err) = self.sender.send(DbWorkItem::UpdateBlockMetadata(Box::new(UpdateBlockMetadataRequest {
+            block_info: DbBlockInfo::from(block_info),
+        }))) {
+            return Err(GeyserPluginError::SlotStatusUpdateError {
+                msg: format!("Failed to update the block metadata at slot {:?}, error: {:?}", block_info.slot, err),
+            });
+        }
+        Ok(())
+    }
+
+    pub fn notify_end_of_startup(&mut self) -> Result<(), GeyserPluginError> {
+        info!("[notify_end_of_startup]");
+        // Ensure all items in the queue has been received by the workers
+        while !self.sender.is_empty() {
+            sleep(Duration::from_millis(100));
+        }
+        self.is_startup_done.store(true, Ordering::Relaxed);
+
+        // Wait for all worker threads to be done with flushing
+        while self.startup_done_count.load(Ordering::Relaxed) != self.initialized_worker_count.load(Ordering::Relaxed) {
+            info!(
+                "[notify_end_of_startup] {}/{}",
+                self.startup_done_count.load(Ordering::Relaxed),
+                self.initialized_worker_count.load(Ordering::Relaxed)
+            );
+            sleep(Duration::from_millis(100));
+        }
+        Ok(())
+    }
+}

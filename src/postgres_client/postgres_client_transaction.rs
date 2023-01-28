@@ -26,6 +26,8 @@ use solana_transaction_status::TransactionStatusMeta;
 use solana_transaction_status::TransactionTokenBalance;
 use std::sync::atomic::Ordering;
 
+use super::LogTransactionRequest;
+
 const MAX_TRANSACTION_STATUS_LEN: usize = 256;
 
 #[derive(Clone, Debug, FromSql, ToSql)]
@@ -149,10 +151,6 @@ pub struct DbTransaction {
     /// before transactions with higher write_versions in a shred.
     pub write_version: i64,
     pub index: i64,
-}
-
-pub struct LogTransactionRequest {
-    pub transaction_info: DbTransaction,
 }
 
 impl From<&MessageAddressTableLookup> for DbTransactionMessageAddressTableLookup {

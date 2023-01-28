@@ -1,6 +1,5 @@
 use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
-use crate::postgres_client::postgres_client_transaction::DbReward;
 use crate::postgres_client::SimplePostgresClient;
 use crate::postgres_client::UpdateBlockMetadataRequest;
 use chrono::Utc;
@@ -8,28 +7,6 @@ use log::*;
 use postgres::Client;
 use postgres::Statement;
 use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
-use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaBlockInfo;
-
-#[derive(Clone, Debug)]
-pub struct DbBlockInfo {
-    pub slot: i64,
-    pub blockhash: String,
-    pub rewards: Vec<DbReward>,
-    pub block_time: Option<i64>,
-    pub block_height: Option<i64>,
-}
-
-impl<'a> From<&ReplicaBlockInfo<'a>> for DbBlockInfo {
-    fn from(block_info: &ReplicaBlockInfo) -> Self {
-        Self {
-            slot: block_info.slot as i64,
-            blockhash: block_info.blockhash.to_string(),
-            rewards: block_info.rewards.iter().map(DbReward::from).collect(),
-            block_time: block_info.block_time,
-            block_height: block_info.block_height.map(|block_height| block_height as i64),
-        }
-    }
-}
 
 impl SimplePostgresClient {
     pub(crate) fn build_block_metadata_upsert_statement(client: &mut Client, config: &GeyserPluginPostgresConfig) -> Result<Statement, GeyserPluginError> {

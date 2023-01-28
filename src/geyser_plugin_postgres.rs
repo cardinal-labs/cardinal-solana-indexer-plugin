@@ -1,6 +1,6 @@
 use crate::accounts_selector::AccountsSelector;
 use crate::config::GeyserPluginPostgresConfig;
-use crate::postgres_client::ParallelPostgresClient;
+use crate::parallel_client::ParallelPostgresClient;
 use crate::postgres_client::PostgresClientBuilder;
 use crate::transaction_selector::TransactionSelector;
 use bs58;
