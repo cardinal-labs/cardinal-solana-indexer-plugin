@@ -292,7 +292,7 @@ impl SimplePostgresClient {
             Err(err) => {
                 let msg = format!("Error in connecting to the PostgreSQL database: {:?} connection_str: {:?}", err, connection_str);
                 error!("{}", msg);
-                Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataStoreConnectionError { msg })))
+                Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConnectionError { msg })))
             }
             Ok(client) => Ok(client),
         }

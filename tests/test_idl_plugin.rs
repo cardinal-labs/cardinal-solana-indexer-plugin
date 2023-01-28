@@ -63,7 +63,6 @@ fn load_test_plugin() -> GeyserPluginPostgres {
 
     let mut geyser_plugin = GeyserPluginPostgres::default();
     geyser_plugin.on_load(config_path.to_str().unwrap()).unwrap();
-
     geyser_plugin
 }
 
