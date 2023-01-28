@@ -1,15 +1,15 @@
 use crate::config::GeyserPluginPostgresConfig;
 use crate::postgres_client::abort;
-use crate::postgres_client::LogTransactionRequest;
+use crate::postgres_client::DbAccountInfo;
+use crate::postgres_client::DbBlockInfo;
+use crate::postgres_client::DbTransaction;
 use crate::postgres_client::PostgresClient;
 use crate::postgres_client::SimplePostgresClient;
-use crate::postgres_client::UpdateAccountRequest;
-use crate::postgres_client::UpdateBlockMetadataRequest;
-use crate::postgres_client::UpdateSlotRequest;
 use crossbeam_channel::Receiver;
 use crossbeam_channel::RecvTimeoutError;
 use log::*;
 use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
+use solana_geyser_plugin_interface::geyser_plugin_interface::SlotStatus;
 use solana_measure::measure::Measure;
 use solana_metrics::*;
 use std::sync::atomic::AtomicBool;
@@ -17,6 +17,25 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
+
+pub struct UpdateAccountRequest {
+    pub account: DbAccountInfo,
+    pub is_startup: bool,
+}
+
+pub struct UpdateSlotRequest {
+    pub slot: u64,
+    pub parent: Option<u64>,
+    pub slot_status: SlotStatus,
+}
+
+pub struct LogTransactionRequest {
+    pub transaction_info: DbTransaction,
+}
+
+pub struct UpdateBlockMetadataRequest {
+    pub block_info: DbBlockInfo,
+}
 
 #[warn(clippy::large_enum_variant)]
 pub enum DbWorkItem {

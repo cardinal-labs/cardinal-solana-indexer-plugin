@@ -631,25 +631,6 @@ impl PostgresClient for SimplePostgresClient {
     }
 }
 
-pub struct UpdateAccountRequest {
-    pub account: DbAccountInfo,
-    pub is_startup: bool,
-}
-
-pub struct UpdateSlotRequest {
-    pub slot: u64,
-    pub parent: Option<u64>,
-    pub slot_status: SlotStatus,
-}
-
-pub struct LogTransactionRequest {
-    pub transaction_info: DbTransaction,
-}
-
-pub struct UpdateBlockMetadataRequest {
-    pub block_info: DbBlockInfo,
-}
-
 pub struct PostgresClientBuilder {}
 
 impl PostgresClientBuilder {
