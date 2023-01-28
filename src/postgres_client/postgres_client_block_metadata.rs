@@ -1,7 +1,6 @@
 use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
 use crate::postgres_client::SimplePostgresClient;
-use crate::postgres_client::UpdateBlockMetadataRequest;
 use chrono::Utc;
 use log::*;
 use postgres::Client;

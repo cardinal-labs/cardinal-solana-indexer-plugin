@@ -24,7 +24,6 @@ use solana_transaction_status::InnerInstructions;
 use solana_transaction_status::Reward;
 use solana_transaction_status::TransactionStatusMeta;
 use solana_transaction_status::TransactionTokenBalance;
-use std::sync::atomic::Ordering;
 
 use super::LogTransactionRequest;
 
@@ -393,7 +392,7 @@ impl From<&TransactionStatusMeta> for DbTransactionStatusMeta {
     }
 }
 
-fn build_db_transaction(slot: u64, transaction_info: &ReplicaTransactionInfo, transaction_write_version: u64) -> DbTransaction {
+pub fn build_db_transaction(slot: u64, transaction_info: &ReplicaTransactionInfo, transaction_write_version: u64) -> DbTransaction {
     DbTransaction {
         signature: transaction_info.signature.as_ref().to_vec(),
         is_vote: transaction_info.is_vote,
@@ -482,26 +481,10 @@ impl SimplePostgresClient {
 }
 
 impl ParallelPostgresClient {
-    fn build_transaction_request(slot: u64, transaction_info: &ReplicaTransactionInfo, transaction_write_version: u64) -> LogTransactionRequest {
+    pub fn build_transaction_request(slot: u64, transaction_info: &ReplicaTransactionInfo, transaction_write_version: u64) -> LogTransactionRequest {
         LogTransactionRequest {
             transaction_info: build_db_transaction(slot, transaction_info, transaction_write_version),
         }
-    }
-
-    pub fn log_transaction_info(&mut self, transaction_info: &ReplicaTransactionInfo, slot: u64) -> Result<(), GeyserPluginError> {
-        self.transaction_write_version.fetch_add(1, Ordering::Relaxed);
-        let wrk_item = DbWorkItem::LogTransaction(Box::new(Self::build_transaction_request(
-            slot,
-            transaction_info,
-            self.transaction_write_version.load(Ordering::Relaxed),
-        )));
-
-        if let Err(err) = self.sender.send(wrk_item) {
-            return Err(GeyserPluginError::SlotStatusUpdateError {
-                msg: format!("Failed to update the transaction, error: {:?}", err),
-            });
-        }
-        Ok(())
     }
 }
 

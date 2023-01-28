@@ -4,6 +4,7 @@ use crate::parallel_client_worker::PostgresClientWorker;
 use crate::postgres_client::abort;
 use crate::postgres_client::DbAccountInfo;
 use crate::postgres_client::DbBlockInfo;
+use crate::postgres_client::LogTransactionRequest;
 use crate::postgres_client::ReadableAccountInfo;
 use crate::postgres_client::UpdateAccountRequest;
 use crate::postgres_client::UpdateBlockMetadataRequest;
@@ -14,6 +15,7 @@ use log::*;
 use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
 use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfo;
 use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaBlockInfo;
+use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaTransactionInfo;
 use solana_geyser_plugin_interface::geyser_plugin_interface::SlotStatus;
 use solana_measure::measure::Measure;
 use solana_metrics::*;
@@ -182,6 +184,22 @@ impl ParallelPostgresClient {
                 self.initialized_worker_count.load(Ordering::Relaxed)
             );
             sleep(Duration::from_millis(100));
+        }
+        Ok(())
+    }
+
+    pub fn log_transaction_info(&mut self, transaction_info: &ReplicaTransactionInfo, slot: u64) -> Result<(), GeyserPluginError> {
+        self.transaction_write_version.fetch_add(1, Ordering::Relaxed);
+        let wrk_item = DbWorkItem::LogTransaction(Box::new(Self::build_transaction_request(
+            slot,
+            transaction_info,
+            self.transaction_write_version.load(Ordering::Relaxed),
+        )));
+
+        if let Err(err) = self.sender.send(wrk_item) {
+            return Err(GeyserPluginError::SlotStatusUpdateError {
+                msg: format!("Failed to update the transaction, error: {:?}", err),
+            });
         }
         Ok(())
     }
