@@ -5,6 +5,8 @@ use std::fs::{self};
 use std::io::Write;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::thread::sleep;
+use std::time::Duration;
 
 use serde_json::json;
 use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPlugin;
@@ -96,6 +98,7 @@ fn test_plugin() {
         )
         .unwrap();
 
+    sleep(Duration::from_secs(1));
     let mut client = SimplePostgresClient::connect_to_db(&geyser_plugin.config.clone().expect("No plugin config found")).expect("Failed to connect");
     let rows = client.query("SELECT * from account", &[]).expect("Error selecting accounts");
     assert!(rows.len() == 1, "Incorrect number of rows found");
