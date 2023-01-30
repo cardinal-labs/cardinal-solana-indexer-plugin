@@ -120,7 +120,6 @@ impl GeyserPlugin for GeyserPluginPostgres {
                 measure_update.stop();
 
                 inc_new_counter_debug!("geyser-plugin-postgres-update-account-client-us", measure_update.as_us() as usize, 100000, 100000);
-
                 if let Err(err) = result {
                     return Err(GeyserPluginError::AccountsUpdateError {
                         msg: format!("Failed to persist the update of account to the PostgreSQL database. Error: {:?}", err),

@@ -37,7 +37,16 @@ impl SimplePostgresClient {
         DO UPDATE SET slot=excluded.slot \
         WHERE owner_index.slot < excluded.slot";
 
-        Self::prepare_query_statement(client, config, BULK_OWNER_INDEX_INSERT_STATEMENT)
+        let stmt = client.prepare(&BULK_OWNER_INDEX_INSERT_STATEMENT);
+        match stmt {
+            Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
+                msg: format!(
+                    "Error in preparing for the accounts update PostgreSQL database: {} host: {:?} user: {:?} config: {:?}",
+                    err, config.host, config.user, config
+                ),
+            }))),
+            Ok(stmt) => Ok(stmt),
+        }
     }
 
     pub fn build_single_token_mint_index_upsert_statement(client: &mut Client, config: &GeyserPluginPostgresConfig) -> Result<Statement, GeyserPluginError> {
@@ -47,7 +56,16 @@ impl SimplePostgresClient {
         DO UPDATE SET slot=excluded.slot \
         WHERE mint_index.slot < excluded.slot";
 
-        Self::prepare_query_statement(client, config, BULK_MINT_INDEX_INSERT_STATEMENT)
+        let stmt = client.prepare(&BULK_MINT_INDEX_INSERT_STATEMENT);
+        match stmt {
+            Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
+                msg: format!(
+                    "Error in preparing for the accounts update PostgreSQL database: {} host: {:?} user: {:?} config: {:?}",
+                    err, config.host, config.user, config
+                ),
+            }))),
+            Ok(stmt) => Ok(stmt),
+        }
     }
 
     /// Common build the token mint index bulk insert statement.

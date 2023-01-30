@@ -9,6 +9,24 @@ use postgres::Statement;
 use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
 use solana_geyser_plugin_interface::geyser_plugin_interface::SlotStatus;
 
+pub fn init_slot(client: &mut Client, _config: &GeyserPluginPostgresConfig) -> Result<(), GeyserPluginError> {
+    let result = client.execute(
+        "CREATE TABLE IF NOT EXISTS slot (
+            slot BIGINT PRIMARY KEY,
+            parent BIGINT,
+            status VARCHAR(16) NOT NULL,
+            updated_on TIMESTAMP NOT NULL
+        )",
+        &[],
+    );
+    match result {
+        Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
+            msg: format!("[init_slot] error={:?}", err),
+        }))),
+        Ok(_) => Ok(()),
+    }
+}
+
 impl SimplePostgresClient {
     pub(crate) fn build_slot_upsert_statement_with_parent(client: &mut Client, config: &GeyserPluginPostgresConfig) -> Result<Statement, GeyserPluginError> {
         let stmt = "INSERT INTO slot (slot, parent, status, updated_on) \

@@ -38,7 +38,7 @@ pub struct UpdateBlockMetadataRequest {
 }
 
 #[warn(clippy::large_enum_variant)]
-pub enum DbWorkItem {
+pub enum WorkRequest {
     UpdateAccount(Box<UpdateAccountRequest>),
     UpdateSlot(Box<UpdateSlotRequest>),
     LogTransaction(Box<LogTransactionRequest>),
@@ -65,7 +65,7 @@ impl PostgresClientWorker {
 
     pub fn do_work(
         &mut self,
-        receiver: Receiver<DbWorkItem>,
+        receiver: Receiver<WorkRequest>,
         exit_worker: Arc<AtomicBool>,
         is_startup_done: Arc<AtomicBool>,
         startup_done_count: Arc<AtomicUsize>,
@@ -78,7 +78,7 @@ impl PostgresClientWorker {
             inc_new_counter_debug!("geyser-plugin-postgres-worker-recv-us", measure.as_us() as usize, 100000, 100000);
             match work {
                 Ok(work) => match work {
-                    DbWorkItem::UpdateAccount(request) => {
+                    WorkRequest::UpdateAccount(request) => {
                         if let Err(err) = self.client.update_account(request.account, request.is_startup) {
                             error!("Failed to update account: ({})", err);
                             if panic_on_db_errors {
@@ -86,7 +86,7 @@ impl PostgresClientWorker {
                             }
                         }
                     }
-                    DbWorkItem::UpdateSlot(request) => {
+                    WorkRequest::UpdateSlot(request) => {
                         if let Err(err) = self.client.update_slot_status(request.slot, request.parent, request.slot_status) {
                             error!("Failed to update slot: ({})", err);
                             if panic_on_db_errors {
@@ -94,7 +94,7 @@ impl PostgresClientWorker {
                             }
                         }
                     }
-                    DbWorkItem::LogTransaction(transaction_log_info) => {
+                    WorkRequest::LogTransaction(transaction_log_info) => {
                         if let Err(err) = self.client.log_transaction(transaction_log_info.transaction_info) {
                             error!("Failed to update transaction: ({})", err);
                             if panic_on_db_errors {
@@ -102,7 +102,7 @@ impl PostgresClientWorker {
                             }
                         }
                     }
-                    DbWorkItem::UpdateBlockMetadata(block_info) => {
+                    WorkRequest::UpdateBlockMetadata(block_info) => {
                         if let Err(err) = self.client.update_block_metadata(block_info.block_info) {
                             error!("Failed to update block metadata: ({})", err);
                             if panic_on_db_errors {

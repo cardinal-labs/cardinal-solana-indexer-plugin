@@ -1,11 +1,11 @@
 use crate::abort;
 use crate::config::GeyserPluginPostgresConfig;
-use crate::parallel_client_worker::DbWorkItem;
 use crate::parallel_client_worker::LogTransactionRequest;
 use crate::parallel_client_worker::PostgresClientWorker;
 use crate::parallel_client_worker::UpdateAccountRequest;
 use crate::parallel_client_worker::UpdateBlockMetadataRequest;
 use crate::parallel_client_worker::UpdateSlotRequest;
+use crate::parallel_client_worker::WorkRequest;
 use crate::postgres_client::build_db_transaction;
 use crate::postgres_client::DbAccountInfo;
 use crate::postgres_client::DbBlockInfo;
@@ -41,7 +41,7 @@ pub struct ParallelPostgresClient {
     is_startup_done: Arc<AtomicBool>,
     startup_done_count: Arc<AtomicUsize>,
     initialized_worker_count: Arc<AtomicUsize>,
-    sender: Sender<DbWorkItem>,
+    sender: Sender<WorkRequest>,
     last_report: AtomicInterval,
     transaction_write_version: AtomicU64,
 }
@@ -126,7 +126,7 @@ impl ParallelPostgresClient {
             datapoint_debug!("postgres-plugin-stats", ("message-queue-length", self.sender.len() as i64, i64),);
         }
         let mut measure = Measure::start("geyser-plugin-posgres-create-work-item");
-        let wrk_item = DbWorkItem::UpdateAccount(Box::new(UpdateAccountRequest {
+        let wrk_item = WorkRequest::UpdateAccount(Box::new(UpdateAccountRequest {
             account: DbAccountInfo::new(account, slot),
             is_startup,
         }));
@@ -150,7 +150,7 @@ impl ParallelPostgresClient {
     }
 
     pub fn update_slot_status(&mut self, slot: u64, parent: Option<u64>, status: SlotStatus) -> Result<(), GeyserPluginError> {
-        if let Err(err) = self.sender.send(DbWorkItem::UpdateSlot(Box::new(UpdateSlotRequest { slot, parent, slot_status: status }))) {
+        if let Err(err) = self.sender.send(WorkRequest::UpdateSlot(Box::new(UpdateSlotRequest { slot, parent, slot_status: status }))) {
             return Err(GeyserPluginError::SlotStatusUpdateError {
                 msg: format!("Failed to update the slot {:?}, error: {:?}", slot, err),
             });
@@ -159,7 +159,7 @@ impl ParallelPostgresClient {
     }
 
     pub fn update_block_metadata(&mut self, block_info: &ReplicaBlockInfo) -> Result<(), GeyserPluginError> {
-        if let Err(err) = self.sender.send(DbWorkItem::UpdateBlockMetadata(Box::new(UpdateBlockMetadataRequest {
+        if let Err(err) = self.sender.send(WorkRequest::UpdateBlockMetadata(Box::new(UpdateBlockMetadataRequest {
             block_info: DbBlockInfo::from(block_info),
         }))) {
             return Err(GeyserPluginError::SlotStatusUpdateError {
@@ -191,7 +191,7 @@ impl ParallelPostgresClient {
 
     pub fn log_transaction_info(&mut self, transaction_info: &ReplicaTransactionInfo, slot: u64) -> Result<(), GeyserPluginError> {
         self.transaction_write_version.fetch_add(1, Ordering::Relaxed);
-        let wrk_item = DbWorkItem::LogTransaction(Box::new(LogTransactionRequest {
+        let wrk_item = WorkRequest::LogTransaction(Box::new(LogTransactionRequest {
             transaction_info: build_db_transaction(slot, transaction_info, self.transaction_write_version.load(Ordering::Relaxed)),
         }));
 

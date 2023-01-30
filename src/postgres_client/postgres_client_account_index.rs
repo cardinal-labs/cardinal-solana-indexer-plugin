@@ -128,6 +128,30 @@ impl<'a> ReadableAccountInfo for ReplicaAccountInfo<'a> {
     }
 }
 
+pub fn init_account(client: &mut Client, _config: &GeyserPluginPostgresConfig) -> Result<(), GeyserPluginError> {
+    let result = client.execute(
+        "CREATE TABLE IF NOT EXISTS account (
+            pubkey BYTEA PRIMARY KEY,
+            owner BYTEA,
+            lamports BIGINT NOT NULL,
+            slot BIGINT NOT NULL,
+            executable BOOL NOT NULL,
+            rent_epoch BIGINT NOT NULL,
+            data BYTEA,
+            write_version BIGINT NOT NULL,
+            updated_on TIMESTAMP NOT NULL,
+            txn_signature BYTEA
+        );",
+        &[],
+    );
+    match result {
+        Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
+            msg: format!("[init_account] error={:?}", err),
+        }))),
+        Ok(_) => Ok(()),
+    }
+}
+
 impl SimplePostgresClient {
     pub(crate) fn build_bulk_account_insert_statement(client: &mut Client, config: &GeyserPluginPostgresConfig) -> Result<Statement, GeyserPluginError> {
         let mut stmt = String::from("INSERT INTO account AS acct (pubkey, slot, owner, lamports, executable, rent_epoch, data, write_version, updated_on, txn_signature) VALUES");

@@ -21,16 +21,7 @@ CREATE INDEX account_owner ON account (owner);
 
 CREATE INDEX account_slot ON account (slot);
 
--- The table storing slot information
-CREATE TABLE slot (
-    slot BIGINT PRIMARY KEY,
-    parent BIGINT,
-    status VARCHAR(16) NOT NULL,
-    updated_on TIMESTAMP NOT NULL
-);
-
 -- Types for Transactions
-
 Create TYPE "TransactionErrorCode" AS ENUM (
     'AccountInUse',
     'AccountLoadedTwice',

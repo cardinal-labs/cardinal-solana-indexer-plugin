@@ -1,5 +1,3 @@
-#![allow(clippy::integer_arithmetic)]
-
 mod postgres_client_account_audit;
 mod postgres_client_account_index;
 mod postgres_client_block_metadata;
@@ -10,6 +8,8 @@ mod postgres_client_transaction;
 use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
 use crate::parallel_client::ParallelPostgresClient;
+use crate::postgres_client::postgres_client_account_index::init_account;
+use crate::postgres_client::postgres_client_slot::init_slot;
 use log::*;
 use openssl::ssl::SslConnector;
 use openssl::ssl::SslFiletype;
@@ -79,9 +79,11 @@ impl SimplePostgresClient {
     pub fn new(config: &GeyserPluginPostgresConfig) -> Result<Self, GeyserPluginError> {
         info!("[SimplePostgresClient] creating");
         let mut client = Self::connect_to_db(config)?;
+        init_account(&mut client, config)?;
+        init_slot(&mut client, config)?;
+
         let bulk_account_insert_stmt = Self::build_bulk_account_insert_statement(&mut client, config)?;
         let update_account_stmt = Self::build_single_account_upsert_statement(&mut client, config)?;
-
         let update_slot_with_parent_stmt = Self::build_slot_upsert_statement_with_parent(&mut client, config)?;
         let update_slot_without_parent_stmt = Self::build_slot_upsert_statement_without_parent(&mut client, config)?;
         let update_transaction_log_stmt = Self::build_transaction_info_upsert_statement(&mut client, config)?;
@@ -89,37 +91,29 @@ impl SimplePostgresClient {
 
         let batch_size = config.batch_size;
 
-        let insert_account_audit_stmt = if config.store_account_historical_data {
-            let stmt = Self::build_account_audit_insert_statement(&mut client, config)?;
-            Some(stmt)
-        } else {
-            None
+        let insert_account_audit_stmt = match config.store_account_historical_data {
+            true => Some(Self::build_account_audit_insert_statement(&mut client, config)?),
+            _ => None,
         };
 
-        let bulk_insert_token_owner_index_stmt = if let Some(true) = config.index_token_owner {
-            let stmt = Self::build_bulk_token_owner_index_insert_statement(&mut client, config)?;
-            Some(stmt)
-        } else {
-            None
+        let bulk_insert_token_owner_index_stmt = match config.index_token_owner {
+            Some(true) => Some(Self::build_bulk_token_owner_index_insert_statement(&mut client, config)?),
+            _ => None,
         };
 
-        let bulk_insert_token_mint_index_stmt = if let Some(true) = config.index_token_mint {
-            let stmt = Self::build_bulk_token_mint_index_insert_statement(&mut client, config)?;
-            Some(stmt)
-        } else {
-            None
+        let bulk_insert_token_mint_index_stmt = match config.index_token_mint {
+            Some(true) => Some(Self::build_bulk_token_mint_index_insert_statement(&mut client, config)?),
+            _ => None,
         };
 
-        let insert_token_owner_index_stmt = if let Some(true) = config.index_token_owner {
-            Some(Self::build_single_token_owner_index_upsert_statement(&mut client, config)?)
-        } else {
-            None
+        let insert_token_owner_index_stmt = match config.index_token_owner {
+            Some(true) => Some(Self::build_single_token_owner_index_upsert_statement(&mut client, config)?),
+            _ => None,
         };
 
-        let insert_token_mint_index_stmt = if let Some(true) = config.index_token_mint {
-            Some(Self::build_single_token_mint_index_upsert_statement(&mut client, config)?)
-        } else {
-            None
+        let insert_token_mint_index_stmt = match config.index_token_mint {
+            Some(true) => Some(Self::build_single_token_mint_index_upsert_statement(&mut client, config)?),
+            _ => None,
         };
 
         info!("[SimplePostgresClient] created");
@@ -216,20 +210,6 @@ impl SimplePostgresClient {
                 Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConnectionError { msg })))
             }
             Ok(client) => Ok(client),
-        }
-    }
-
-    fn prepare_query_statement(client: &mut Client, config: &GeyserPluginPostgresConfig, stmt: &str) -> Result<Statement, GeyserPluginError> {
-        let statement = client.prepare(stmt);
-
-        match statement {
-            Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
-                msg: format!(
-                    "Error in preparing for the statement {} for PostgreSQL database: {} host: {:?} user: {:?} config: {:?}",
-                    stmt, err, config.host, config.user, config
-                ),
-            }))),
-            Ok(statement) => Ok(statement),
         }
     }
 

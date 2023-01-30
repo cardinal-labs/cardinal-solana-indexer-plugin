@@ -1,76 +1,19 @@
-#![allow(clippy::integer_arithmetic)]
-
-use std::fs::File;
-use std::fs::{self};
-use std::io::Write;
-use std::path::PathBuf;
 use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
 
-use serde_json::json;
 use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPlugin;
 use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfo;
 use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfoVersions;
 use solana_geyser_plugin_postgres::geyser_plugin_postgres::GeyserPluginPostgres;
 use solana_geyser_plugin_postgres::postgres_client::SimplePostgresClient;
 use solana_sdk::pubkey::Pubkey;
-use tempfile::TempDir;
-
-fn temp_dir() -> TempDir {
-    let dir: String = std::env::var("TEMP_DIR").unwrap_or_else(|_| "temp".to_string());
-    fs::create_dir_all(dir.clone()).unwrap();
-    let dir_path = PathBuf::from(dir);
-    tempfile::tempdir_in(dir_path).unwrap()
-}
-
-fn load_test_plugin() -> GeyserPluginPostgres {
-    let tmp_dir = temp_dir();
-    let mut config_path = tmp_dir.path().to_path_buf();
-    config_path.push("accounts_db_plugin.json");
-    let mut config_file = File::create(config_path.clone()).unwrap();
-
-    let lib_name = match std::env::consts::OS {
-        "macos" => "libsolana_geyser_plugin.dylib",
-        _ => "libsolana_geyser_plugin.so",
-    };
-
-    let mut lib_path = config_path.clone();
-    lib_path.pop();
-    lib_path.pop();
-    lib_path.pop();
-    lib_path.push("target");
-    lib_path.push("debug");
-    lib_path.push(lib_name);
-
-    let lib_path = lib_path.as_os_str().to_str().unwrap();
-    write!(
-        config_file,
-        "{}",
-        json!({
-            "libpath": lib_path,
-            "connection_str": "host=localhost user=solana password=solana port=5432",
-            "threads": 20,
-            "batch_size": 20,
-            "panic_on_db_errors": true,
-            "accounts_selector" : {
-                "accounts" : ["*"]
-            },
-            "transaction_selector" : {
-                "mentions" : ["*"]
-            }
-        })
-    )
-    .unwrap();
-
-    let mut geyser_plugin = GeyserPluginPostgres::default();
-    geyser_plugin.on_load(config_path.to_str().unwrap()).unwrap();
-    geyser_plugin
-}
 
 #[test]
-fn test_plugin() {
-    let mut geyser_plugin = load_test_plugin();
+fn test_account() {
+    let mut geyser_plugin = GeyserPluginPostgres::default();
+    geyser_plugin.on_load(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_config.json")).unwrap();
+
     geyser_plugin
         .update_account(
             ReplicaAccountInfoVersions::V0_0_1(&ReplicaAccountInfo {
