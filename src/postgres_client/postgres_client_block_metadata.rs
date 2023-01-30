@@ -30,6 +30,27 @@ impl<'a> From<&ReplicaBlockInfo<'a>> for DbBlockInfo {
         }
     }
 }
+
+pub fn init_block(client: &mut Client, _config: &GeyserPluginPostgresConfig) -> Result<(), GeyserPluginError> {
+    let result = client.execute(
+        "CREATE TABLE IF NOT EXISTS block (
+            slot BIGINT PRIMARY KEY,
+            blockhash VARCHAR(44),
+            rewards \"Reward\"[],
+            block_time BIGINT,
+            block_height BIGINT,
+            updated_on TIMESTAMP NOT NULL
+        )",
+        &[],
+    );
+    match result {
+        Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
+            msg: format!("[init_slot] error={:?}", err),
+        }))),
+        Ok(_) => Ok(()),
+    }
+}
+
 impl SimplePostgresClient {
     pub(crate) fn build_block_metadata_upsert_statement(client: &mut Client, config: &GeyserPluginPostgresConfig) -> Result<Statement, GeyserPluginError> {
         let stmt = "INSERT INTO block (slot, blockhash, rewards, block_time, block_height, updated_on) \

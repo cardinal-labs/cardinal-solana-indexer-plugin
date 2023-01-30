@@ -9,7 +9,9 @@ use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
 use crate::parallel_client::ParallelPostgresClient;
 use crate::postgres_client::postgres_client_account_index::init_account;
+use crate::postgres_client::postgres_client_block_metadata::init_block;
 use crate::postgres_client::postgres_client_slot::init_slot;
+use crate::postgres_client::postgres_client_token_account_index::init_token_account;
 use log::*;
 use openssl::ssl::SslConnector;
 use openssl::ssl::SslFiletype;
@@ -81,6 +83,8 @@ impl SimplePostgresClient {
         let mut client = Self::connect_to_db(config)?;
         init_account(&mut client, config)?;
         init_slot(&mut client, config)?;
+        init_block(&mut client, config)?;
+        init_token_account(&mut client, config)?;
 
         let bulk_account_insert_stmt = Self::build_bulk_account_insert_statement(&mut client, config)?;
         let update_account_stmt = Self::build_single_account_upsert_statement(&mut client, config)?;

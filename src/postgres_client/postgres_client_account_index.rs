@@ -129,7 +129,7 @@ impl<'a> ReadableAccountInfo for ReplicaAccountInfo<'a> {
 }
 
 pub fn init_account(client: &mut Client, _config: &GeyserPluginPostgresConfig) -> Result<(), GeyserPluginError> {
-    let result = client.execute(
+    let result = client.batch_execute(
         "CREATE TABLE IF NOT EXISTS account (
             pubkey BYTEA PRIMARY KEY,
             owner BYTEA,
@@ -141,8 +141,10 @@ pub fn init_account(client: &mut Client, _config: &GeyserPluginPostgresConfig) -
             write_version BIGINT NOT NULL,
             updated_on TIMESTAMP NOT NULL,
             txn_signature BYTEA
-        )",
-        &[],
+        );
+        CREATE INDEX IF NOT EXISTS account_owner ON account (owner);
+        CREATE INDEX IF NOT EXISTS account_slot ON account (slot);
+        ",
     );
     match result {
         Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {

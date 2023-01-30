@@ -29,6 +29,34 @@ pub struct TokenSecondaryIndexEntry {
     slot: i64,
 }
 
+pub fn init_token_account(client: &mut Client, _config: &GeyserPluginPostgresConfig) -> Result<(), GeyserPluginError> {
+    let result = client.batch_execute(
+        "CREATE TABLE IF NOT EXISTS spl_token_owner_index (
+                owner_key BYTEA NOT NULL,
+                account_key BYTEA NOT NULL,
+                slot BIGINT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS spl_token_owner_index_owner_key ON spl_token_owner_index (owner_key);
+            CREATE UNIQUE INDEX IF NOT EXISTS spl_token_owner_index_owner_pair ON spl_token_owner_index (owner_key, account_key);
+
+            CREATE TABLE IF NOT EXISTS spl_token_mint_index (
+                mint_key BYTEA NOT NULL,
+                account_key BYTEA NOT NULL,
+                slot BIGINT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS spl_token_mint_index_mint_key ON spl_token_mint_index (mint_key);
+            CREATE UNIQUE INDEX IF NOT EXISTS spl_token_mint_index_mint_pair ON spl_token_mint_index (mint_key, account_key);
+        ",
+    );
+    match result {
+        Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
+            msg: format!("[init_account] error={:?}", err),
+        }))),
+        Ok(_) => Ok(()),
+    }
+}
+
 impl SimplePostgresClient {
     pub fn build_single_token_owner_index_upsert_statement(client: &mut Client, config: &GeyserPluginPostgresConfig) -> Result<Statement, GeyserPluginError> {
         const BULK_OWNER_INDEX_INSERT_STATEMENT: &str = "INSERT INTO spl_token_owner_index AS owner_index (owner_key, account_key, slot) \
