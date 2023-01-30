@@ -10,6 +10,54 @@ use postgres::Client;
 use postgres::Statement;
 use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
 
+pub fn init_account_audit(client: &mut Client, _config: &GeyserPluginPostgresConfig) -> Result<(), GeyserPluginError> {
+    let result = client.batch_execute(
+        "
+        CREATE TABLE IF NOT EXISTS account_audit (
+            pubkey BYTEA,
+            owner BYTEA,
+            lamports BIGINT NOT NULL,
+            slot BIGINT NOT NULL,
+            executable BOOL NOT NULL,
+            rent_epoch BIGINT NOT NULL,
+            data BYTEA,
+            write_version BIGINT NOT NULL,
+            updated_on TIMESTAMP NOT NULL,
+            txn_signature BYTEA
+        );
+        CREATE INDEX IF NOT EXISTS account_audit_account_key ON  account_audit (pubkey, write_version);
+        CREATE INDEX IF NOT EXISTS account_audit_pubkey_slot ON account_audit (pubkey, slot);
+        
+        DO $$ BEGIN
+            CREATE FUNCTION audit_account_update() RETURNS trigger AS $audit_account_update$
+                BEGIN
+                    INSERT INTO account_audit (pubkey, owner, lamports, slot, executable,
+                                            rent_epoch, data, write_version, updated_on, txn_signature)
+                        VALUES (OLD.pubkey, OLD.owner, OLD.lamports, OLD.slot,
+                                OLD.executable, OLD.rent_epoch, OLD.data,
+                                OLD.write_version, OLD.updated_on, OLD.txn_signature);
+                    RETURN NEW;
+                END;
+            $audit_account_update$ LANGUAGE plpgsql;
+            
+            exception
+                when duplicate_function then
+                null;
+        END $$;
+
+        CREATE OR REPLACE TRIGGER account_update_trigger AFTER UPDATE OR DELETE ON account
+            FOR EACH ROW EXECUTE PROCEDURE audit_account_update();
+
+        ",
+    );
+    match result {
+        Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
+            msg: format!("[init_account_audit] error={:?}", err),
+        }))),
+        Ok(_) => Ok(()),
+    }
+}
+
 impl SimplePostgresClient {
     pub(crate) fn build_account_audit_insert_statement(client: &mut Client, config: &GeyserPluginPostgresConfig) -> Result<Statement, GeyserPluginError> {
         let stmt = "INSERT INTO account_audit (pubkey, slot, owner, lamports, executable, rent_epoch, data, write_version, updated_on, txn_signature) \

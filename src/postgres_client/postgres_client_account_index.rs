@@ -130,7 +130,8 @@ impl<'a> ReadableAccountInfo for ReplicaAccountInfo<'a> {
 
 pub fn init_account(client: &mut Client, _config: &GeyserPluginPostgresConfig) -> Result<(), GeyserPluginError> {
     let result = client.batch_execute(
-        "CREATE TABLE IF NOT EXISTS account (
+        "
+        CREATE TABLE IF NOT EXISTS account (
             pubkey BYTEA PRIMARY KEY,
             owner BYTEA,
             lamports BIGINT NOT NULL,

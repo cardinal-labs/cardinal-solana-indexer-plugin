@@ -32,16 +32,40 @@ impl<'a> From<&ReplicaBlockInfo<'a>> for DbBlockInfo {
 }
 
 pub fn init_block(client: &mut Client, _config: &GeyserPluginPostgresConfig) -> Result<(), GeyserPluginError> {
-    let result = client.execute(
-        "CREATE TABLE IF NOT EXISTS block (
+    let result = client.batch_execute(
+        "
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'RewardType') THEN
+                CREATE TYPE \"RewardType\" AS ENUM (
+                    'Fee',
+                    'Rent',
+                    'Staking',
+                    'Voting'
+                );
+            END IF;
+        END $$;
+        
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'Reward') THEN
+                CREATE TYPE \"Reward\" AS (
+                    pubkey VARCHAR(44),
+                    lamports BIGINT,
+                    post_balance BIGINT,
+                    reward_type \"RewardType\",
+                    commission SMALLINT
+                );
+            END IF;
+        END $$;     
+        
+        CREATE TABLE IF NOT EXISTS block (
             slot BIGINT PRIMARY KEY,
             blockhash VARCHAR(44),
             rewards \"Reward\"[],
             block_time BIGINT,
             block_height BIGINT,
             updated_on TIMESTAMP NOT NULL
-        )",
-        &[],
+        );
+        ",
     );
     match result {
         Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {

@@ -8,10 +8,12 @@ mod postgres_client_transaction;
 use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
 use crate::parallel_client::ParallelPostgresClient;
+use crate::postgres_client::postgres_client_account_audit::init_account_audit;
 use crate::postgres_client::postgres_client_account_index::init_account;
 use crate::postgres_client::postgres_client_block_metadata::init_block;
 use crate::postgres_client::postgres_client_slot::init_slot;
 use crate::postgres_client::postgres_client_token_account_index::init_token_account;
+use crate::postgres_client::postgres_client_transaction::init_transaction;
 use log::*;
 use openssl::ssl::SslConnector;
 use openssl::ssl::SslFiletype;
@@ -81,10 +83,6 @@ impl SimplePostgresClient {
     pub fn new(config: &GeyserPluginPostgresConfig) -> Result<Self, GeyserPluginError> {
         info!("[SimplePostgresClient] creating");
         let mut client = Self::connect_to_db(config)?;
-        init_account(&mut client, config)?;
-        init_slot(&mut client, config)?;
-        init_block(&mut client, config)?;
-        init_token_account(&mut client, config)?;
 
         let bulk_account_insert_stmt = Self::build_bulk_account_insert_statement(&mut client, config)?;
         let update_account_stmt = Self::build_single_account_upsert_statement(&mut client, config)?;
@@ -296,10 +294,17 @@ pub struct PostgresClientBuilder {}
 
 impl PostgresClientBuilder {
     pub fn build_pararallel_postgres_client(config: &GeyserPluginPostgresConfig) -> Result<(ParallelPostgresClient, Option<u64>), GeyserPluginError> {
+        let mut client = SimplePostgresClient::connect_to_db(config)?;
+        init_account(&mut client, config)?;
+        init_slot(&mut client, config)?;
+        init_block(&mut client, config)?;
+        init_transaction(&mut client, config)?;
+        init_token_account(&mut client, config)?;
+        init_account_audit(&mut client, config)?;
+
         let batch_optimize_by_skiping_older_slots = match config.skip_upsert_existing_accounts_at_startup {
             true => {
                 let mut on_load_client = SimplePostgresClient::new(config)?;
-
                 // database if populated concurrently so we need to move some number of slots
                 // below highest available slot to make sure we do not skip anything that was already in DB.
                 let batch_slot_bound = on_load_client.get_highest_available_slot()?.saturating_sub(config.safe_batch_starting_slot_cushion);
