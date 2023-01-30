@@ -141,7 +141,7 @@ pub fn init_account(client: &mut Client, _config: &GeyserPluginPostgresConfig) -
             write_version BIGINT NOT NULL,
             updated_on TIMESTAMP NOT NULL,
             txn_signature BYTEA
-        );",
+        )",
         &[],
     );
     match result {
