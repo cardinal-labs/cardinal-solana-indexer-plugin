@@ -1,5 +1,3 @@
-use log::*;
-use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
 use solana_sdk::pubkey;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::pubkey::PUBKEY_BYTES;
@@ -60,7 +58,6 @@ impl AccountHandler for TokenAccountHandler {
         if !self.account_match(account) {
             return "".to_string();
         };
-
         let mint: &Pubkey = bytemuck::from_bytes(&account.data[SPL_TOKEN_ACCOUNT_MINT_OFFSET..SPL_TOKEN_ACCOUNT_MINT_OFFSET + PUBKEY_BYTES]);
         let owner: &Pubkey = bytemuck::from_bytes(&account.data[SPL_TOKEN_ACCOUNT_OWNER_OFFSET..SPL_TOKEN_ACCOUNT_OWNER_OFFSET + PUBKEY_BYTES]);
         let pubkey = Pubkey::new(account.pubkey());
@@ -68,10 +65,10 @@ impl AccountHandler for TokenAccountHandler {
         return format!(
             "
                 INSERT INTO spl_token_account AS spl_token_entry (pubkey, owner, mint, slot) \
-                VALUES ({0}, {1}, {2}, {3}) \
+                VALUES ('{0}', '{1}', '{2}', {3}) \
                 ON CONFLICT (pubkey, owner, mint) \
                 DO UPDATE SET slot=excluded.slot \
-                WHERE spl_token_entry.slot < excluded.slot
+                WHERE spl_token_entry.slot < excluded.slot;
             ",
             &bs58::encode(pubkey).into_string(),
             &bs58::encode(owner).into_string(),

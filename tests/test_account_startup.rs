@@ -14,7 +14,7 @@ use solana_sdk::signer::Signer;
 static OWNER: Pubkey = pubkey!("mgr99QFMYByTqGPWmNqunV7vBLmWWXdSrHUfV8Jf3JM");
 
 #[test]
-fn test_account() {
+fn test_account_startup() {
     let address: Pubkey = Keypair::new().pubkey();
     let mut geyser_plugin = GeyserPluginPostgres::default();
     geyser_plugin.on_load(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_config.json")).unwrap();
@@ -42,11 +42,13 @@ fn test_account() {
                 write_version: 0,
             }),
             0,
-            false,
+            true,
         )
         .unwrap();
 
+    geyser_plugin.notify_end_of_startup().unwrap();
     sleep(Duration::from_secs(1));
+
     let mut client = SimplePostgresClient::connect_to_db(&geyser_plugin.config.clone().expect("No plugin config found")).expect("Failed to connect");
     let rows = client.query("SELECT * from account where pubkey=$1", &[&address.as_ref()]).expect("Error selecting accounts");
     assert_eq!(rows.len(), 1, "Incorrect number of rows found");
