@@ -91,8 +91,6 @@ impl SimplePostgresClient {
         let update_transaction_log_stmt = Self::build_transaction_info_upsert_statement(&mut client, config)?;
         let update_block_metadata_stmt = Self::build_block_metadata_upsert_statement(&mut client, config)?;
 
-        let batch_size = config.batch_size;
-
         let insert_account_audit_stmt = match config.store_account_historical_data {
             true => Some(Self::build_account_audit_insert_statement(&mut client, config)?),
             _ => None,
@@ -118,6 +116,7 @@ impl SimplePostgresClient {
             _ => None,
         };
 
+        let batch_size = config.batch_size;
         info!("[SimplePostgresClient] created");
         Ok(Self {
             batch_size,
@@ -153,7 +152,7 @@ impl SimplePostgresClient {
                         "\"connection_str\": {:?}, or \"host\": {:?} \"user\": {:?} must be specified",
                         config.connection_str, config.host, config.user
                     );
-                    return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConfigurationError { msg })));
+                    return Err(GeyserPluginError::ConfigFileReadError { msg });
                 }
                 format!("host={} user={} port={}", config.host.as_ref().unwrap(), config.user.as_ref().unwrap(), config.port)
             }
@@ -163,15 +162,15 @@ impl SimplePostgresClient {
             Some(true) => {
                 if config.server_ca.is_none() {
                     let msg = "\"server_ca\" must be specified when \"use_ssl\" is set".to_string();
-                    return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConfigurationError { msg })));
+                    return Err(GeyserPluginError::ConfigFileReadError { msg });
                 }
                 if config.client_cert.is_none() {
                     let msg = "\"client_cert\" must be specified when \"use_ssl\" is set".to_string();
-                    return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConfigurationError { msg })));
+                    return Err(GeyserPluginError::ConfigFileReadError { msg });
                 }
                 if config.client_key.is_none() {
                     let msg = "\"client_key\" must be specified when \"use_ssl\" is set".to_string();
-                    return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConfigurationError { msg })));
+                    return Err(GeyserPluginError::ConfigFileReadError { msg });
                 }
                 let mut builder = SslConnector::builder(SslMethod::tls()).unwrap();
                 if let Err(err) = builder.set_ca_file(config.server_ca.as_ref().unwrap()) {
@@ -180,7 +179,7 @@ impl SimplePostgresClient {
                         config.server_ca.as_ref().unwrap(),
                         err
                     );
-                    return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConfigurationError { msg })));
+                    return Err(GeyserPluginError::ConfigFileReadError { msg });
                 }
                 if let Err(err) = builder.set_certificate_file(config.client_cert.as_ref().unwrap(), SslFiletype::PEM) {
                     let msg = format!(
@@ -188,11 +187,11 @@ impl SimplePostgresClient {
                         config.client_cert.as_ref().unwrap(),
                         err
                     );
-                    return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConfigurationError { msg })));
+                    return Err(GeyserPluginError::ConfigFileReadError { msg });
                 }
                 if let Err(err) = builder.set_private_key_file(config.client_key.as_ref().unwrap(), SslFiletype::PEM) {
                     let msg = format!("Failed to set the client key specified by \"client_key\": {}. Error: ({})", config.client_key.as_ref().unwrap(), err);
-                    return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConfigurationError { msg })));
+                    return Err(GeyserPluginError::ConfigFileReadError { msg });
                 }
 
                 let mut connector = MakeTlsConnector::new(builder.build());
@@ -251,7 +250,7 @@ impl SimplePostgresClient {
 impl PostgresClient for SimplePostgresClient {
     fn update_account(&mut self, account: DbAccountInfo, is_startup: bool) -> Result<(), GeyserPluginError> {
         trace!(
-            "Updating account {} with owner {} at slot {}",
+            "[update_account] account=[{}] owner=[{}] slot=[{}]",
             bs58::encode(account.pubkey()).into_string(),
             bs58::encode(account.owner()).into_string(),
             account.slot,
@@ -265,7 +264,7 @@ impl PostgresClient for SimplePostgresClient {
     }
 
     fn update_slot_status(&mut self, slot: u64, parent: Option<u64>, status: SlotStatus) -> Result<(), GeyserPluginError> {
-        info!("Updating slot {:?} at with status {:?}", slot, status);
+        info!("[update_slot_status] slot=[{:?}] status=[{:?}]", slot, status);
 
         let client = self.client.get_mut().unwrap();
 

@@ -43,8 +43,6 @@ pub enum GeyserPluginPostgresError {
     ConnectionError { msg: String },
     #[error("Error preparing data store schema. Error message: ({msg})")]
     DataSchemaError { msg: String },
-    #[error("Error preparing data store schema. Error message: ({msg})")]
-    ConfigurationError { msg: String },
 }
 
 fn client_err() -> Result<()> {

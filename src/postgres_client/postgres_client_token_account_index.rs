@@ -3,28 +3,24 @@ use super::ReadableAccountInfo;
 use super::SimplePostgresClient;
 use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
-use crate::inline_spl_token;
-use crate::inline_spl_token::GenericTokenAccount;
-use crate::inline_spl_token_2022;
+use crate::spl_token::TokenAccount;
 use log::*;
 use postgres::Client;
 use postgres::Statement;
 use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
 use solana_measure::measure::Measure;
 use solana_metrics::*;
-use solana_sdk::pubkey::Pubkey;
 use tokio_postgres::types;
 
 const TOKEN_INDEX_COLUMN_COUNT: usize = 3;
+
 /// Struct for the secondary index for both token account's owner and mint index,
 pub struct TokenSecondaryIndexEntry {
     /// In case of token owner, the secondary key is the Pubkey of the owner and in case of
     /// token index the secondary_key is the Pubkey of mint.
     secondary_key: Vec<u8>,
-
     /// The Pubkey of the account
     account_key: Vec<u8>,
-
     /// Record the slot at which the index entry is created.
     slot: i64,
 }
@@ -190,53 +186,41 @@ impl SimplePostgresClient {
         Self::bulk_insert_token_index_common(self.batch_size, &mut client.client, &mut self.pending_token_mint_index, query)
     }
 
-    /// Generic function to queue the token owner index for bulk insert.
-    fn queue_token_owner_index_generic<G: GenericTokenAccount>(&mut self, token_id: &Pubkey, account: &DbAccountInfo) {
-        if account.owner() == token_id.as_ref() {
-            if let Some(owner_key) = G::unpack_account_owner(account.data()) {
-                let owner_key = owner_key.as_ref().to_vec();
-                let pubkey = account.pubkey();
-                self.pending_token_owner_index.push(TokenSecondaryIndexEntry {
-                    secondary_key: owner_key,
-                    account_key: pubkey.to_vec(),
-                    slot: account.slot,
-                });
-            }
-        }
-    }
-
-    /// Generic function to queue the token mint index for bulk insert.
-    fn queue_token_mint_index_generic<G: GenericTokenAccount>(&mut self, token_id: &Pubkey, account: &DbAccountInfo) {
-        if account.owner() == token_id.as_ref() {
-            if let Some(mint_key) = G::unpack_account_mint(account.data()) {
-                let mint_key = mint_key.as_ref().to_vec();
-                let pubkey = account.pubkey();
-                self.pending_token_mint_index.push(TokenSecondaryIndexEntry {
-                    secondary_key: mint_key,
-                    account_key: pubkey.to_vec(),
-                    slot: account.slot,
-                })
-            }
-        }
-    }
-
     /// Queue bulk insert secondary indexes: token owner and token mint indexes.
     pub fn queue_secondary_indexes(&mut self, account: &DbAccountInfo) {
         if self.index_token_owner {
-            self.queue_token_owner_index_generic::<inline_spl_token::Account>(&inline_spl_token::id(), account);
-            self.queue_token_owner_index_generic::<inline_spl_token_2022::Account>(&inline_spl_token_2022::id(), account);
+            if TokenAccount::valid_token_program(account.owner()) {
+                if let Some(owner_key) = TokenAccount::unpack_account_owner(account.data()) {
+                    let owner_key = owner_key.as_ref().to_vec();
+                    let pubkey = account.pubkey();
+                    self.pending_token_owner_index.push(TokenSecondaryIndexEntry {
+                        secondary_key: owner_key,
+                        account_key: pubkey.to_vec(),
+                        slot: account.slot,
+                    });
+                }
+            }
         }
 
         if self.index_token_mint {
-            self.queue_token_mint_index_generic::<inline_spl_token::Account>(&inline_spl_token::id(), account);
-            self.queue_token_mint_index_generic::<inline_spl_token_2022::Account>(&inline_spl_token_2022::id(), account);
+            if TokenAccount::valid_token_program(account.owner()) {
+                if let Some(mint_key) = TokenAccount::unpack_account_mint(account.data()) {
+                    let mint_key = mint_key.as_ref().to_vec();
+                    let pubkey = account.pubkey();
+                    self.pending_token_mint_index.push(TokenSecondaryIndexEntry {
+                        secondary_key: mint_key,
+                        account_key: pubkey.to_vec(),
+                        slot: account.slot,
+                    })
+                }
+            }
         }
     }
 
-    /// Generic function to update a single token owner index.
-    fn update_token_owner_index_generic<G: GenericTokenAccount>(client: &mut Client, statement: &Statement, token_id: &Pubkey, account: &DbAccountInfo) -> Result<(), GeyserPluginError> {
-        if account.owner() == token_id.as_ref() {
-            if let Some(owner_key) = G::unpack_account_owner(account.data()) {
+    /// Function for updating a single token owner index.
+    pub fn update_token_owner_index(client: &mut Client, statement: &Statement, account: &DbAccountInfo) -> Result<(), GeyserPluginError> {
+        if TokenAccount::valid_token_program(account.owner()) {
+            if let Some(owner_key) = TokenAccount::unpack_account_owner(account.data()) {
                 let owner_key = owner_key.as_ref().to_vec();
                 let pubkey = account.pubkey();
                 let slot = account.slot;
@@ -248,14 +232,13 @@ impl SimplePostgresClient {
                 }
             }
         }
-
         Ok(())
     }
 
-    /// Generic function to update a single token mint index.
-    fn update_token_mint_index_generic<G: GenericTokenAccount>(client: &mut Client, statement: &Statement, token_id: &Pubkey, account: &DbAccountInfo) -> Result<(), GeyserPluginError> {
-        if account.owner() == token_id.as_ref() {
-            if let Some(mint_key) = G::unpack_account_mint(account.data()) {
+    /// Function for updating a single token mint index.
+    pub fn update_token_mint_index(client: &mut Client, statement: &Statement, account: &DbAccountInfo) -> Result<(), GeyserPluginError> {
+        if TokenAccount::valid_token_program(account.owner()) {
+            if let Some(mint_key) = TokenAccount::unpack_account_mint(account.data()) {
                 let mint_key = mint_key.as_ref().to_vec();
                 let pubkey = account.pubkey();
                 let slot = account.slot;
@@ -267,22 +250,7 @@ impl SimplePostgresClient {
                 }
             }
         }
-
         Ok(())
-    }
-
-    /// Function for updating a single token owner index.
-    pub fn update_token_owner_index(client: &mut Client, statement: &Statement, account: &DbAccountInfo) -> Result<(), GeyserPluginError> {
-        Self::update_token_owner_index_generic::<inline_spl_token::Account>(client, statement, &inline_spl_token::id(), account)?;
-
-        Self::update_token_owner_index_generic::<inline_spl_token_2022::Account>(client, statement, &inline_spl_token_2022::id(), account)
-    }
-
-    /// Function for updating a single token mint index.
-    pub fn update_token_mint_index(client: &mut Client, statement: &Statement, account: &DbAccountInfo) -> Result<(), GeyserPluginError> {
-        Self::update_token_mint_index_generic::<inline_spl_token::Account>(client, statement, &inline_spl_token::id(), account)?;
-
-        Self::update_token_mint_index_generic::<inline_spl_token_2022::Account>(client, statement, &inline_spl_token_2022::id(), account)
     }
 
     /// Clean up the buffered indexes -- we do not need to

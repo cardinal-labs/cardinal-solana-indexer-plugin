@@ -57,7 +57,7 @@ impl ParallelClientWorker {
         match result {
             Ok(client) => Ok(ParallelClientWorker { client, is_startup_done: false }),
             Err(err) => {
-                error!("Error in creating SimplePostgresClient: {}", err);
+                error!("[ParallelClientWorker] error=[{}]", err);
                 Err(err)
             }
         }
