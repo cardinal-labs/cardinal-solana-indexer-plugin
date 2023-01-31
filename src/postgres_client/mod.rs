@@ -7,7 +7,7 @@ mod postgres_client_transaction;
 
 use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
-use crate::parallel_client::ParallelPostgresClient;
+use crate::parallel_client::ParallelClient;
 use crate::postgres_client::postgres_client_account_audit::init_account_audit;
 use crate::postgres_client::postgres_client_account_index::init_account;
 use crate::postgres_client::postgres_client_block_metadata::init_block;
@@ -293,7 +293,7 @@ impl PostgresClient for SimplePostgresClient {
 pub struct PostgresClientBuilder {}
 
 impl PostgresClientBuilder {
-    pub fn build_pararallel_postgres_client(config: &GeyserPluginPostgresConfig) -> Result<(ParallelPostgresClient, Option<u64>), GeyserPluginError> {
+    pub fn build_pararallel_postgres_client(config: &GeyserPluginPostgresConfig) -> Result<(ParallelClient, Option<u64>), GeyserPluginError> {
         let mut client = SimplePostgresClient::connect_to_db(config)?;
         init_account(&mut client, config)?;
         init_slot(&mut client, config)?;
@@ -314,6 +314,6 @@ impl PostgresClientBuilder {
             false => None,
         };
 
-        ParallelPostgresClient::new(config).map(|v| (v, batch_optimize_by_skiping_older_slots))
+        ParallelClient::new(config).map(|v| (v, batch_optimize_by_skiping_older_slots))
     }
 }

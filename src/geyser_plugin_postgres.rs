@@ -1,6 +1,6 @@
 use crate::accounts_selector::AccountsSelector;
 use crate::config::GeyserPluginPostgresConfig;
-use crate::parallel_client::ParallelPostgresClient;
+use crate::parallel_client::ParallelClient;
 use crate::postgres_client::PostgresClientBuilder;
 use crate::transaction_selector::TransactionSelector;
 use bs58;
@@ -19,7 +19,7 @@ use thiserror::Error;
 #[derive(Default)]
 pub struct GeyserPluginPostgres {
     pub config: Option<GeyserPluginPostgresConfig>,
-    client: Option<ParallelPostgresClient>,
+    client: Option<ParallelClient>,
     accounts_selector: Option<AccountsSelector>,
     transaction_selector: Option<TransactionSelector>,
     batch_starting_slot: Option<u64>,

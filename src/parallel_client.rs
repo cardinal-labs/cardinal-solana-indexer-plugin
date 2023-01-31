@@ -1,7 +1,7 @@
 use crate::abort;
 use crate::config::GeyserPluginPostgresConfig;
 use crate::parallel_client_worker::LogTransactionRequest;
-use crate::parallel_client_worker::PostgresClientWorker;
+use crate::parallel_client_worker::ParallelClientWorker;
 use crate::parallel_client_worker::UpdateAccountRequest;
 use crate::parallel_client_worker::UpdateBlockMetadataRequest;
 use crate::parallel_client_worker::UpdateSlotRequest;
@@ -35,7 +35,7 @@ use std::time::Duration;
 const MAX_ASYNC_REQUESTS: usize = 40960;
 
 #[warn(clippy::large_enum_variant)]
-pub struct ParallelPostgresClient {
+pub struct ParallelClient {
     workers: Vec<JoinHandle<Result<(), GeyserPluginError>>>,
     exit_worker: Arc<AtomicBool>,
     is_startup_done: Arc<AtomicBool>,
@@ -46,9 +46,9 @@ pub struct ParallelPostgresClient {
     transaction_write_version: AtomicU64,
 }
 
-impl ParallelPostgresClient {
+impl ParallelClient {
     pub fn new(config: &GeyserPluginPostgresConfig) -> Result<Self, GeyserPluginError> {
-        info!("[ParallelPostgresClient] config=[{:?}]", config);
+        info!("[ParallelClient] config=[{:?}]", config);
         let (sender, receiver) = bounded(MAX_ASYNC_REQUESTS);
         let exit_worker = Arc::new(AtomicBool::new(false));
         let mut workers = Vec::default();
@@ -67,7 +67,7 @@ impl ParallelPostgresClient {
                 .name(format!("worker-{}", i))
                 .spawn(move || -> Result<(), GeyserPluginError> {
                     let panic_on_db_errors = config.panic_on_db_errors;
-                    match PostgresClientWorker::new(config) {
+                    match ParallelClientWorker::new(config) {
                         Ok(mut worker) => {
                             initialized_worker_count_clone.fetch_add(1, Ordering::Relaxed);
                             worker.do_work(cloned_receiver, exit_clone, is_startup_done_clone, startup_done_count_clone, panic_on_db_errors)?;
@@ -117,11 +117,6 @@ impl ParallelPostgresClient {
     }
 
     pub fn update_account(&mut self, account: &ReplicaAccountInfo, slot: u64, is_startup: bool) -> Result<(), GeyserPluginError> {
-        // we are not interested in accountsdb internal bookeeping updates
-        // if !is_startup && account.txn_signature().is_none() {
-        //     return Ok(());
-        // }
-
         if self.last_report.should_update(30000) {
             datapoint_debug!("postgres-plugin-stats", ("message-queue-length", self.sender.len() as i64, i64),);
         }

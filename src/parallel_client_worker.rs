@@ -45,17 +45,17 @@ pub enum WorkRequest {
     UpdateBlockMetadata(Box<UpdateBlockMetadataRequest>),
 }
 
-pub struct PostgresClientWorker {
+pub struct ParallelClientWorker {
     client: SimplePostgresClient,
     /// Indicating if accounts notification during startup is done.
     is_startup_done: bool,
 }
 
-impl PostgresClientWorker {
+impl ParallelClientWorker {
     pub fn new(config: GeyserPluginPostgresConfig) -> Result<Self, GeyserPluginError> {
         let result = SimplePostgresClient::new(&config);
         match result {
-            Ok(client) => Ok(PostgresClientWorker { client, is_startup_done: false }),
+            Ok(client) => Ok(ParallelClientWorker { client, is_startup_done: false }),
             Err(err) => {
                 error!("Error in creating SimplePostgresClient: {}", err);
                 Err(err)
