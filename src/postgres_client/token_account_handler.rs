@@ -33,7 +33,7 @@ impl AccountHandler for TokenAccountHandler {
         "spl_token_account".to_string()
     }
 
-    fn init(&self, client: &mut postgres::Client, config: &crate::config::GeyserPluginPostgresConfig) -> String {
+    fn init(&self, config: &crate::config::GeyserPluginPostgresConfig) -> String {
         if !self.enabled(config) {
             return "".to_string();
         };
@@ -56,30 +56,27 @@ impl AccountHandler for TokenAccountHandler {
             || account.owner() == TOKENZ_PROGRAM_ID.as_ref() && SPL_TOKEN_ACCOUNT_DISCRIMINATOR == *account.data.get(SPL_TOKEN_ACCOUNT_LENGTH).unwrap_or(&0)
     }
 
-    fn account_update(&self, client: &mut postgres::Client, account: &DbAccountInfo) -> Result<(), GeyserPluginError> {
+    fn account_update(&self, account: &DbAccountInfo) -> String {
         if !self.account_match(account) {
-            return Ok(());
+            return "".to_string();
         };
 
         let mint: &Pubkey = bytemuck::from_bytes(&account.data[SPL_TOKEN_ACCOUNT_MINT_OFFSET..SPL_TOKEN_ACCOUNT_MINT_OFFSET + PUBKEY_BYTES]);
         let owner: &Pubkey = bytemuck::from_bytes(&account.data[SPL_TOKEN_ACCOUNT_OWNER_OFFSET..SPL_TOKEN_ACCOUNT_OWNER_OFFSET + PUBKEY_BYTES]);
         let pubkey = Pubkey::new(account.pubkey());
         let slot = account.slot;
-        let result = client.execute(
+        return format!(
             "
                 INSERT INTO spl_token_account AS spl_token_entry (pubkey, owner, mint, slot) \
-                VALUES ($1, $2, $3, $4) \
+                VALUES ({0}, {1}, {2}, {3}) \
                 ON CONFLICT (pubkey, owner, mint) \
                 DO UPDATE SET slot=excluded.slot \
                 WHERE spl_token_entry.slot < excluded.slot
             ",
-            &[&bs58::encode(pubkey).into_string(), &bs58::encode(owner).into_string(), &bs58::encode(mint).into_string(), &slot],
+            &bs58::encode(pubkey).into_string(),
+            &bs58::encode(owner).into_string(),
+            &bs58::encode(mint).into_string(),
+            &slot,
         );
-        if let Err(err) = result {
-            let msg = format!("[account_update] error=[{:?}]", err);
-            error!("{}", msg);
-            return Err(GeyserPluginError::AccountsUpdateError { msg });
-        }
-        Ok(())
     }
 }

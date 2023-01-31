@@ -220,11 +220,17 @@ impl PostgresClient for SimplePostgresClient {
             account.slot,
         );
         if !is_startup {
-            let account_match = self.account_handlers.iter().find(|h| h.account_match(&account));
-            return match account_match {
-                Some(a) => a.account_update(&mut self.client.get_mut().unwrap().client, &account),
-                None => self.upsert_account(&account),
-            };
+            let query = self.account_handlers.iter().map(|h| h.account_update(&account)).collect::<Vec<String>>().join("");
+            if !query.is_empty() {
+                let client = self.client.get_mut().unwrap();
+                return match client.client.batch_execute(&query) {
+                    Ok(_) => Ok(()),
+                    Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
+                        msg: format!("[build_pararallel_postgres_client] error=[{}]", err,),
+                    }))),
+                };
+            }
+            return self.upsert_account(&account);
         }
 
         self.slots_at_startup.insert(account.slot as u64);
@@ -269,7 +275,7 @@ impl PostgresClientBuilder {
         init_account_audit(&mut client, config)?;
 
         let account_handlers = vec![Box::new(TokenAccountHandler {})];
-        let init_query = account_handlers.iter().map(|a| a.init(&mut client, config)).collect::<Vec<String>>().join(",");
+        let init_query = account_handlers.iter().map(|a| a.init(config)).collect::<Vec<String>>().join("");
         if let Err(err) = client.batch_execute(&init_query) {
             return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
                 msg: format!("[build_pararallel_postgres_client] error=[{}]", err,),

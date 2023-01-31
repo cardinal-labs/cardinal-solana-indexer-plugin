@@ -1,6 +1,3 @@
-use postgres::Client;
-use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
-
 use crate::config::GeyserPluginPostgresConfig;
 
 use super::DbAccountInfo;
@@ -12,9 +9,9 @@ pub trait AccountHandler {
         true
     }
 
-    fn init(&self, client: &mut Client, config: &GeyserPluginPostgresConfig) -> String;
+    fn init(&self, config: &GeyserPluginPostgresConfig) -> String;
 
     fn account_match(&self, account: &DbAccountInfo) -> bool;
 
-    fn account_update(&self, client: &mut Client, account: &DbAccountInfo) -> Result<(), GeyserPluginError>;
+    fn account_update(&self, account: &DbAccountInfo) -> String;
 }
