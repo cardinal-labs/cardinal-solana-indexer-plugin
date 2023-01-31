@@ -222,14 +222,7 @@ impl SimplePostgresClient {
     }
 
     /// Internal function for updating or inserting a single account
-    pub(crate) fn upsert_account_internal(
-        account: &DbAccountInfo,
-        statement: &Statement,
-        client: &mut Client,
-        insert_account_audit_stmt: &Option<Statement>,
-        insert_token_owner_index_stmt: &Option<Statement>,
-        insert_token_mint_index_stmt: &Option<Statement>,
-    ) -> Result<(), GeyserPluginError> {
+    pub(crate) fn upsert_account_internal(account: &DbAccountInfo, statement: &Statement, client: &mut Client, insert_account_audit_stmt: &Option<Statement>) -> Result<(), GeyserPluginError> {
         let lamports = account.lamports() as i64;
         let rent_epoch = account.rent_epoch() as i64;
         let updated_on = Utc::now().naive_utc();
@@ -260,14 +253,6 @@ impl SimplePostgresClient {
             Self::insert_account_audit(account, statement, client)?;
         }
 
-        if let Some(insert_token_owner_index_stmt) = insert_token_owner_index_stmt {
-            Self::update_token_owner_index(client, insert_token_owner_index_stmt, account)?;
-        }
-
-        if let Some(insert_token_mint_index_stmt) = insert_token_mint_index_stmt {
-            Self::update_token_mint_index(client, insert_token_mint_index_stmt, account)?;
-        }
-
         Ok(())
     }
 
@@ -276,22 +261,16 @@ impl SimplePostgresClient {
         let client = self.client.get_mut().unwrap();
         let insert_account_audit_stmt = &client.insert_account_audit_stmt;
         let statement = &client.update_account_stmt;
-        let insert_token_owner_index_stmt = &client.insert_token_owner_index_stmt;
-        let insert_token_mint_index_stmt = &client.insert_token_mint_index_stmt;
         let client = &mut client.client;
-        Self::upsert_account_internal(account, statement, client, insert_account_audit_stmt, insert_token_owner_index_stmt, insert_token_mint_index_stmt)?;
+        Self::upsert_account_internal(account, statement, client, insert_account_audit_stmt)?;
 
         Ok(())
     }
 
     /// Insert accounts in batch to reduce network overhead
     pub(crate) fn insert_accounts_in_batch(&mut self, account: DbAccountInfo) -> Result<(), GeyserPluginError> {
-        self.queue_secondary_indexes(&account);
         self.pending_account_updates.push(account);
-
-        self.bulk_insert_accounts()?;
-        self.bulk_insert_token_owner_index()?;
-        self.bulk_insert_token_mint_index()
+        self.bulk_insert_accounts()
     }
 
     fn bulk_insert_accounts(&mut self) -> Result<(), GeyserPluginError> {

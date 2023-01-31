@@ -3,7 +3,6 @@ mod postgres_client_account_audit;
 mod postgres_client_account_index;
 mod postgres_client_block_metadata;
 mod postgres_client_slot;
-mod postgres_client_token_account_index;
 mod postgres_client_transaction;
 mod token_account_handler;
 
@@ -14,7 +13,6 @@ use crate::postgres_client::postgres_client_account_audit::init_account_audit;
 use crate::postgres_client::postgres_client_account_index::init_account;
 use crate::postgres_client::postgres_client_block_metadata::init_block;
 use crate::postgres_client::postgres_client_slot::init_slot;
-use crate::postgres_client::postgres_client_token_account_index::init_token_account;
 use crate::postgres_client::postgres_client_transaction::init_transaction;
 use crate::postgres_client::token_account_handler::TokenAccountHandler;
 use log::*;
@@ -37,7 +35,6 @@ use self::account_handler::AccountHandler;
 pub use self::postgres_client_account_index::DbAccountInfo;
 pub use self::postgres_client_account_index::ReadableAccountInfo;
 pub use self::postgres_client_block_metadata::DbBlockInfo;
-use self::postgres_client_token_account_index::TokenSecondaryIndexEntry;
 pub use self::postgres_client_transaction::build_db_transaction;
 pub use self::postgres_client_transaction::DbTransaction;
 
@@ -50,20 +47,12 @@ struct PostgresSqlClientWrapper {
     update_transaction_log_stmt: Statement,
     update_block_metadata_stmt: Statement,
     insert_account_audit_stmt: Option<Statement>,
-    insert_token_owner_index_stmt: Option<Statement>,
-    insert_token_mint_index_stmt: Option<Statement>,
-    bulk_insert_token_owner_index_stmt: Option<Statement>,
-    bulk_insert_token_mint_index_stmt: Option<Statement>,
 }
 
 pub struct SimplePostgresClient {
     batch_size: usize,
     slots_at_startup: HashSet<u64>,
     pending_account_updates: Vec<DbAccountInfo>,
-    index_token_owner: bool,
-    index_token_mint: bool,
-    pending_token_owner_index: Vec<TokenSecondaryIndexEntry>,
-    pending_token_mint_index: Vec<TokenSecondaryIndexEntry>,
     account_handlers: Vec<Box<dyn AccountHandler>>,
     client: Mutex<PostgresSqlClientWrapper>,
 }
@@ -101,26 +90,6 @@ impl SimplePostgresClient {
             _ => None,
         };
 
-        let bulk_insert_token_owner_index_stmt = match config.index_token_owner {
-            Some(true) => Some(Self::build_bulk_token_owner_index_insert_statement(&mut client, config)?),
-            _ => None,
-        };
-
-        let bulk_insert_token_mint_index_stmt = match config.index_token_mint {
-            Some(true) => Some(Self::build_bulk_token_mint_index_insert_statement(&mut client, config)?),
-            _ => None,
-        };
-
-        let insert_token_owner_index_stmt = match config.index_token_owner {
-            Some(true) => Some(Self::build_single_token_owner_index_upsert_statement(&mut client, config)?),
-            _ => None,
-        };
-
-        let insert_token_mint_index_stmt = match config.index_token_mint {
-            Some(true) => Some(Self::build_single_token_mint_index_upsert_statement(&mut client, config)?),
-            _ => None,
-        };
-
         let batch_size = config.batch_size;
         info!("[SimplePostgresClient] created");
         Ok(Self {
@@ -135,16 +104,8 @@ impl SimplePostgresClient {
                 update_transaction_log_stmt,
                 update_block_metadata_stmt,
                 insert_account_audit_stmt,
-                insert_token_owner_index_stmt,
-                insert_token_mint_index_stmt,
-                bulk_insert_token_owner_index_stmt,
-                bulk_insert_token_mint_index_stmt,
             }),
             account_handlers: vec![Box::new(TokenAccountHandler {})],
-            index_token_owner: config.index_token_owner.unwrap_or_default(),
-            index_token_mint: config.index_token_mint.unwrap_or(false),
-            pending_token_owner_index: Vec::with_capacity(batch_size),
-            pending_token_mint_index: Vec::with_capacity(batch_size),
             slots_at_startup: HashSet::default(),
         })
     }
@@ -225,13 +186,11 @@ impl SimplePostgresClient {
         let client = self.client.get_mut().unwrap();
         let insert_account_audit_stmt = &client.insert_account_audit_stmt;
         let statement = &client.update_account_stmt;
-        let insert_token_owner_index_stmt = &client.insert_token_owner_index_stmt;
-        let insert_token_mint_index_stmt = &client.insert_token_mint_index_stmt;
         let insert_slot_stmt = &client.update_slot_without_parent_stmt;
         let client = &mut client.client;
 
         for account in self.pending_account_updates.drain(..) {
-            Self::upsert_account_internal(&account, statement, client, insert_account_audit_stmt, insert_token_owner_index_stmt, insert_token_mint_index_stmt)?;
+            Self::upsert_account_internal(&account, statement, client, insert_account_audit_stmt)?;
         }
 
         let mut measure = Measure::start("geyser-plugin-postgres-flush-slots-us");
@@ -248,7 +207,6 @@ impl SimplePostgresClient {
         );
 
         self.slots_at_startup.clear();
-        self.clear_buffered_indexes();
         Ok(())
     }
 }
@@ -308,7 +266,6 @@ impl PostgresClientBuilder {
         init_slot(&mut client, config)?;
         init_block(&mut client, config)?;
         init_transaction(&mut client, config)?;
-        init_token_account(&mut client, config)?;
         init_account_audit(&mut client, config)?;
 
         let account_handlers = vec![Box::new(TokenAccountHandler {})];

@@ -117,12 +117,6 @@ pub struct GeyserPluginPostgresConfig {
     /// Specify the path to the local client's private PEM key file.
     pub client_key: Option<String>,
 
-    /// Controls whether to index the token owners. The default is false
-    pub index_token_owner: Option<bool>,
-
-    /// Controls whether to index the token mints. The default is false
-    pub index_token_mint: Option<bool>,
-
     /// Controls if this plugin can read the database on_load() to find heighest slot
     /// and ignore upsert accounts (at_startup) that should already exist in DB
     pub skip_upsert_existing_accounts_at_startup: bool,
@@ -149,8 +143,6 @@ impl Default for GeyserPluginPostgresConfig {
             server_ca: None,
             client_cert: None,
             client_key: None,
-            index_token_owner: None,
-            index_token_mint: None,
             skip_upsert_existing_accounts_at_startup: false,
             safe_batch_starting_slot_cushion: 2 * 40960,
         }
