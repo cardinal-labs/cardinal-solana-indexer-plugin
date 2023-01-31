@@ -1,4 +1,3 @@
-use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -7,7 +6,11 @@ use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfo;
 use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfoVersions;
 use solana_geyser_plugin_postgres::geyser_plugin_postgres::GeyserPluginPostgres;
 use solana_geyser_plugin_postgres::postgres_client::SimplePostgresClient;
+use solana_sdk::pubkey;
 use solana_sdk::pubkey::Pubkey;
+
+static ADDRESS: Pubkey = pubkey!("DWLt9b43ZbwoDdPrQMa9k7xTp2ASgQjKXEtFHWaz6xTU");
+static OWNER: Pubkey = pubkey!("mgr99QFMYByTqGPWmNqunV7vBLmWWXdSrHUfV8Jf3JM");
 
 #[test]
 fn test_account() {
@@ -17,9 +20,9 @@ fn test_account() {
     geyser_plugin
         .update_account(
             ReplicaAccountInfoVersions::V0_0_1(&ReplicaAccountInfo {
-                pubkey: Pubkey::from_str("DWLt9b43ZbwoDdPrQMa9k7xTp2ASgQjKXEtFHWaz6xTU").unwrap().as_ref(),
+                pubkey: ADDRESS.as_ref(),
                 lamports: 2790960,
-                owner: Pubkey::from_str("mgr99QFMYByTqGPWmNqunV7vBLmWWXdSrHUfV8Jf3JM").unwrap().as_ref(),
+                owner: OWNER.as_ref(),
                 executable: false,
                 rent_epoch: 0,
                 data: &[
@@ -43,21 +46,15 @@ fn test_account() {
 
     sleep(Duration::from_secs(1));
     let mut client = SimplePostgresClient::connect_to_db(&geyser_plugin.config.clone().expect("No plugin config found")).expect("Failed to connect");
-    let rows = client.query("SELECT * from account", &[]).expect("Error selecting accounts");
+    let rows = client.query("SELECT * from account where pubkey=$1", &[&ADDRESS.as_ref()]).expect("Error selecting accounts");
     assert!(rows.len() == 1, "Incorrect number of rows found");
     let first_row = rows.first().expect("No results found");
 
     let pubkey: Vec<u8> = first_row.get("pubkey");
-    assert!(
-        Pubkey::new_from_array(pubkey[..].try_into().unwrap()) == Pubkey::from_str("DWLt9b43ZbwoDdPrQMa9k7xTp2ASgQjKXEtFHWaz6xTU").unwrap(),
-        "Incorrect pubkey"
-    );
+    assert!(Pubkey::new_from_array(pubkey[..].try_into().unwrap()) == ADDRESS, "Incorrect pubkey");
 
     let owner: Vec<u8> = first_row.get("owner");
-    assert!(
-        Pubkey::new_from_array(owner[..].try_into().unwrap()) == Pubkey::from_str("mgr99QFMYByTqGPWmNqunV7vBLmWWXdSrHUfV8Jf3JM").unwrap(),
-        "Incorrect pubkey"
-    );
+    assert!(Pubkey::new_from_array(owner[..].try_into().unwrap()) == OWNER, "Incorrect pubkey");
     client.close().expect("Error disconnecting");
     geyser_plugin.on_unload();
 }
