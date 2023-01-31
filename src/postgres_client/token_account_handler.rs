@@ -1,4 +1,3 @@
-use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
 use log::*;
 use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
 use solana_sdk::pubkey;
@@ -34,29 +33,22 @@ impl AccountHandler for TokenAccountHandler {
         "spl_token_account".to_string()
     }
 
-    fn init(&self, client: &mut postgres::Client, config: &crate::config::GeyserPluginPostgresConfig) -> Result<(), GeyserPluginError> {
+    fn init(&self, client: &mut postgres::Client, config: &crate::config::GeyserPluginPostgresConfig) -> String {
         if !self.enabled(config) {
-            return Ok(());
+            return "".to_string();
         };
-
-        let result = client.batch_execute(
-            "CREATE TABLE IF NOT EXISTS spl_token_account (
-                    pubkey VARCHAR(44) NOT NULL,
-                    owner VARCHAR(44) NOT NULL,
-                    mint VARCHAR(44) NOT NULL,
-                    slot BIGINT NOT NULL
-                );
-                CREATE INDEX IF NOT EXISTS spl_token_account_owner ON spl_token_account (owner);
-                CREATE INDEX IF NOT EXISTS spl_token_account_mint ON spl_token_account (mint);
-                CREATE UNIQUE INDEX IF NOT EXISTS spl_token_account_owner_pair ON spl_token_account (pubkey, owner, mint);
-            ",
-        );
-        match result {
-            Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
-                msg: format!("[init_account] error={:?}", err),
-            }))),
-            Ok(_) => Ok(()),
-        }
+        return "
+            CREATE TABLE IF NOT EXISTS spl_token_account (
+                pubkey VARCHAR(44) NOT NULL,
+                owner VARCHAR(44) NOT NULL,
+                mint VARCHAR(44) NOT NULL,
+                slot BIGINT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS spl_token_account_owner ON spl_token_account (owner);
+            CREATE INDEX IF NOT EXISTS spl_token_account_mint ON spl_token_account (mint);
+            CREATE UNIQUE INDEX IF NOT EXISTS spl_token_account_owner_pair ON spl_token_account (pubkey, owner, mint);
+        "
+        .to_string();
     }
 
     fn account_match(&self, account: &DbAccountInfo) -> bool {

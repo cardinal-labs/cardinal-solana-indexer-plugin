@@ -12,7 +12,7 @@ pub trait AccountHandler {
         true
     }
 
-    fn init(&self, client: &mut Client, config: &GeyserPluginPostgresConfig) -> Result<(), GeyserPluginError>;
+    fn init(&self, client: &mut Client, config: &GeyserPluginPostgresConfig) -> String;
 
     fn account_match(&self, account: &DbAccountInfo) -> bool;
 

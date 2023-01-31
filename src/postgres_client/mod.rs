@@ -269,10 +269,11 @@ impl PostgresClientBuilder {
         init_account_audit(&mut client, config)?;
 
         let account_handlers = vec![Box::new(TokenAccountHandler {})];
-        let init_results: Result<Vec<_>, _> = account_handlers.iter().map(|a| a.init(&mut client, config)).collect();
-        if let Err(err) = init_results {
-            error!("[build_pararallel_postgres_client] error=[{}]", err);
-            return Err(err);
+        let init_query = account_handlers.iter().map(|a| a.init(&mut client, config)).collect::<Vec<String>>().join(",");
+        if let Err(err) = client.batch_execute(&init_query) {
+            return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
+                msg: format!("[build_pararallel_postgres_client] error=[{}]", err,),
+            })));
         };
 
         let batch_optimize_by_skiping_older_slots = match config.skip_upsert_existing_accounts_at_startup {
