@@ -1,6 +1,5 @@
 use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
-use crate::postgres_client::SimplePostgresClient;
 use chrono::Utc;
 use log::*;
 use postgres::Client;
@@ -31,88 +30,76 @@ impl<'a> From<&ReplicaBlockInfo<'a>> for DbBlockInfo {
     }
 }
 
-pub fn init_block(client: &mut Client, _config: &GeyserPluginPostgresConfig) -> Result<(), GeyserPluginError> {
-    let result = client.batch_execute(
-        "
-        DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'RewardType') THEN
-                CREATE TYPE \"RewardType\" AS ENUM (
-                    'Fee',
-                    'Rent',
-                    'Staking',
-                    'Voting'
-                );
-            END IF;
-        END $$;
-        
-        DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'Reward') THEN
-                CREATE TYPE \"Reward\" AS (
-                    pubkey VARCHAR(44),
-                    lamports BIGINT,
-                    post_balance BIGINT,
-                    reward_type \"RewardType\",
-                    commission SMALLINT
-                );
-            END IF;
-        END $$;     
-        
-        CREATE TABLE IF NOT EXISTS block (
-            slot BIGINT PRIMARY KEY,
-            blockhash VARCHAR(44),
-            rewards \"Reward\"[],
-            block_time BIGINT,
-            block_height BIGINT,
-            updated_on TIMESTAMP NOT NULL
-        );
-        ",
-    );
-    match result {
-        Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
-            msg: format!("[init_slot] error={:?}", err),
-        }))),
-        Ok(_) => Ok(()),
-    }
+pub struct BlockHandler {
+    pub upsert_statement: Statement,
 }
 
-impl SimplePostgresClient {
-    pub(crate) fn build_block_metadata_upsert_statement(client: &mut Client, config: &GeyserPluginPostgresConfig) -> Result<Statement, GeyserPluginError> {
+impl BlockHandler {
+    pub fn new(client: &mut Client, config: &GeyserPluginPostgresConfig) -> Result<BlockHandler, GeyserPluginError> {
         let stmt = "INSERT INTO block (slot, blockhash, rewards, block_time, block_height, updated_on) \
         VALUES ($1, $2, $3, $4, $5, $6) \
         ON CONFLICT (slot) DO UPDATE SET blockhash=excluded.blockhash, rewards=excluded.rewards, \
         block_time=excluded.block_time, block_height=excluded.block_height, updated_on=excluded.updated_on";
-
-        let stmt = client.prepare(stmt);
-
-        match stmt {
+        match client.prepare(stmt) {
+            Ok(statement) => Ok(BlockHandler { upsert_statement: statement }),
             Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
                 msg: format!(
                     "Error in preparing for the block metadata update PostgreSQL database: ({}) host: {:?} user: {:?} config: {:?}",
                     err, config.host, config.user, config
                 ),
             }))),
-            Ok(stmt) => Ok(stmt),
         }
     }
 
-    pub(crate) fn update_block_metadata_impl(&mut self, block_info: DbBlockInfo) -> Result<(), GeyserPluginError> {
-        let client = self.client.get_mut().unwrap();
-        let statement = &client.update_block_metadata_stmt;
-        let client = &mut client.client;
-        let updated_on = Utc::now().naive_utc();
+    pub fn init(_config: &crate::config::GeyserPluginPostgresConfig) -> String {
+        return "
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'RewardType') THEN
+                    CREATE TYPE \"RewardType\" AS ENUM (
+                        'Fee',
+                        'Rent',
+                        'Staking',
+                        'Voting'
+                    );
+                END IF;
+            END $$;
+            
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'Reward') THEN
+                    CREATE TYPE \"Reward\" AS (
+                        pubkey VARCHAR(44),
+                        lamports BIGINT,
+                        post_balance BIGINT,
+                        reward_type \"RewardType\",
+                        commission SMALLINT
+                    );
+                END IF;
+            END $$;     
+            
+            CREATE TABLE IF NOT EXISTS block (
+                slot BIGINT PRIMARY KEY,
+                blockhash VARCHAR(44),
+                rewards \"Reward\"[],
+                block_time BIGINT,
+                block_height BIGINT,
+                updated_on TIMESTAMP NOT NULL
+            );
+        "
+        .to_string();
+    }
 
+    pub fn update(&self, client: &mut Client, block_info: DbBlockInfo) -> Result<(), GeyserPluginError> {
         let result = client.query(
-            statement,
+            &self.upsert_statement,
             &[
                 &block_info.slot,
                 &block_info.blockhash,
                 &block_info.rewards,
                 &block_info.block_time,
                 &block_info.block_height,
-                &updated_on,
+                &Utc::now().naive_utc(),
             ],
         );
-
         if let Err(err) = result {
             let msg = format!("Failed to persist the update of block metadata to the PostgreSQL database. Error: {:?}", err);
             error!("{}", msg);
