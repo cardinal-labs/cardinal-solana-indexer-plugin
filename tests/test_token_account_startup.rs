@@ -9,13 +9,13 @@ use solana_geyser_plugin_postgres::postgres_client::SimplePostgresClient;
 use solana_sdk::pubkey;
 use solana_sdk::pubkey::Pubkey;
 
-static ADDRESS: Pubkey = pubkey!("J7Gc9vhfyNAe44MDSKyo8BsFxGCF6qfwpt8xGK3JGBTF");
+static ADDRESS: Pubkey = pubkey!("J7Gc9vhfyNAe44MDSKyo8BsFxGCF6qfwpt8xGK3JGBT2");
 static OWNER: Pubkey = pubkey!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-static TOKEN_ACCOUNT_OWNER: Pubkey = pubkey!("cpmaMZyBQiPxpeuxNsQhW7N8z1o9yaNdLgiPhWGUEiX");
-static MINT: Pubkey = pubkey!("DUSTawucrTsGU8hcqRdHDCbuYhCPADMLM2VcCb8VnFnQ");
+static TOKEN_ACCOUNT_OWNER: Pubkey = pubkey!("cpmaMZyBQiPxpeuxNsQhW7N8z1o9yaNdLgiPhWGUEi2");
+static MINT: Pubkey = pubkey!("DUSTawucrTsGU8hcqRdHDCbuYhCPADMLM2VcCb8VnFn2");
 
 #[test]
-fn test_token_account() {
+fn test_token_account_startup() {
     let mut geyser_plugin = GeyserPluginPostgres::default();
     geyser_plugin.on_load(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_config.json")).unwrap();
 
@@ -38,10 +38,11 @@ fn test_token_account() {
                 write_version: 0,
             }),
             0,
-            false,
+            true,
         )
         .unwrap();
 
+    geyser_plugin.notify_end_of_startup().unwrap();
     sleep(Duration::from_secs(1));
     let mut client = SimplePostgresClient::connect_to_db(&geyser_plugin.config.clone().expect("No plugin config found")).expect("Failed to connect");
 

@@ -1,9 +1,11 @@
+mod account_handler;
 mod postgres_client_account_audit;
 mod postgres_client_account_index;
 mod postgres_client_block_metadata;
 mod postgres_client_slot;
 mod postgres_client_token_account_index;
 mod postgres_client_transaction;
+mod token_account_handler;
 
 use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
@@ -14,6 +16,7 @@ use crate::postgres_client::postgres_client_block_metadata::init_block;
 use crate::postgres_client::postgres_client_slot::init_slot;
 use crate::postgres_client::postgres_client_token_account_index::init_token_account;
 use crate::postgres_client::postgres_client_transaction::init_transaction;
+use crate::postgres_client::token_account_handler::TokenAccountHandler;
 use log::*;
 use openssl::ssl::SslConnector;
 use openssl::ssl::SslFiletype;
@@ -30,6 +33,7 @@ use std::collections::HashSet;
 use std::sync::Mutex;
 use std::thread;
 
+use self::account_handler::AccountHandler;
 pub use self::postgres_client_account_index::DbAccountInfo;
 pub use self::postgres_client_account_index::ReadableAccountInfo;
 pub use self::postgres_client_block_metadata::DbBlockInfo;
@@ -60,6 +64,7 @@ pub struct SimplePostgresClient {
     index_token_mint: bool,
     pending_token_owner_index: Vec<TokenSecondaryIndexEntry>,
     pending_token_mint_index: Vec<TokenSecondaryIndexEntry>,
+    account_handlers: Vec<Box<dyn AccountHandler>>,
     client: Mutex<PostgresSqlClientWrapper>,
 }
 
@@ -135,6 +140,7 @@ impl SimplePostgresClient {
                 bulk_insert_token_owner_index_stmt,
                 bulk_insert_token_mint_index_stmt,
             }),
+            account_handlers: vec![Box::new(TokenAccountHandler {})],
             index_token_owner: config.index_token_owner.unwrap_or_default(),
             index_token_mint: config.index_token_mint.unwrap_or(false),
             pending_token_owner_index: Vec::with_capacity(batch_size),
@@ -256,7 +262,11 @@ impl PostgresClient for SimplePostgresClient {
             account.slot,
         );
         if !is_startup {
-            return self.upsert_account(&account);
+            let account_match = self.account_handlers.iter().find(|h| h.account_match(&account));
+            return match account_match {
+                Some(a) => a.account_update(&mut self.client.get_mut().unwrap().client, &account),
+                None => self.upsert_account(&account),
+            };
         }
 
         self.slots_at_startup.insert(account.slot as u64);
@@ -300,6 +310,13 @@ impl PostgresClientBuilder {
         init_transaction(&mut client, config)?;
         init_token_account(&mut client, config)?;
         init_account_audit(&mut client, config)?;
+
+        let account_handlers = vec![Box::new(TokenAccountHandler {})];
+        let init_results: Result<Vec<_>, _> = account_handlers.iter().map(|a| a.init(&mut client, config)).collect();
+        if let Err(err) = init_results {
+            error!("[build_pararallel_postgres_client] error=[{}]", err);
+            return Err(err);
+        };
 
         let batch_optimize_by_skiping_older_slots = match config.skip_upsert_existing_accounts_at_startup {
             true => {
