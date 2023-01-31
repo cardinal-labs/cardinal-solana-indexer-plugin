@@ -1,19 +1,16 @@
 mod account_handler;
-mod postgres_client_account_audit;
-mod postgres_client_account_index;
 mod postgres_client_block_metadata;
-mod postgres_client_slot;
 mod postgres_client_transaction;
+mod slot_handler;
 mod token_account_handler;
 mod unknown_account_handler;
 
 use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
 use crate::parallel_client::ParallelClient;
-use crate::postgres_client::postgres_client_account_audit::init_account_audit;
 use crate::postgres_client::postgres_client_block_metadata::init_block;
-use crate::postgres_client::postgres_client_slot::init_slot;
 use crate::postgres_client::postgres_client_transaction::init_transaction;
+use crate::postgres_client::slot_handler::SlotHandler;
 use crate::postgres_client::token_account_handler::TokenAccountHandler;
 use log::*;
 use openssl::ssl::SslConnector;
@@ -32,8 +29,8 @@ use std::sync::Mutex;
 use std::thread;
 
 use self::account_handler::AccountHandler;
-pub use self::postgres_client_account_index::DbAccountInfo;
-pub use self::postgres_client_account_index::ReadableAccountInfo;
+pub use self::account_handler::DbAccountInfo;
+pub use self::account_handler::ReadableAccountInfo;
 pub use self::postgres_client_block_metadata::DbBlockInfo;
 pub use self::postgres_client_transaction::build_db_transaction;
 pub use self::postgres_client_transaction::DbTransaction;
@@ -41,8 +38,6 @@ use self::unknown_account_handler::UnknownAccountHandler;
 
 struct PostgresSqlClientWrapper {
     client: Client,
-    update_slot_with_parent_stmt: Statement,
-    update_slot_without_parent_stmt: Statement,
     update_transaction_log_stmt: Statement,
     update_block_metadata_stmt: Statement,
 }
@@ -75,8 +70,6 @@ impl SimplePostgresClient {
     pub fn new(config: &GeyserPluginPostgresConfig) -> Result<Self, GeyserPluginError> {
         info!("[SimplePostgresClient] creating");
         let mut client = Self::connect_to_db(config)?;
-        let update_slot_with_parent_stmt = Self::build_slot_upsert_statement_with_parent(&mut client, config)?;
-        let update_slot_without_parent_stmt = Self::build_slot_upsert_statement_without_parent(&mut client, config)?;
         let update_transaction_log_stmt = Self::build_transaction_info_upsert_statement(&mut client, config)?;
         let update_block_metadata_stmt = Self::build_block_metadata_upsert_statement(&mut client, config)?;
 
@@ -87,8 +80,6 @@ impl SimplePostgresClient {
             pending_account_updates: Vec::with_capacity(batch_size),
             client: Mutex::new(PostgresSqlClientWrapper {
                 client,
-                update_slot_with_parent_stmt,
-                update_slot_without_parent_stmt,
                 update_transaction_log_stmt,
                 update_block_metadata_stmt,
             }),
@@ -167,43 +158,6 @@ impl SimplePostgresClient {
             Ok(client) => Ok(client),
         }
     }
-
-    /// Flush any left over accounts in batch which are not processed in the last batch
-    fn flush_buffered_writes(&mut self) -> Result<(), GeyserPluginError> {
-        let client = self.client.get_mut().unwrap();
-        let insert_slot_stmt = &client.update_slot_without_parent_stmt;
-        let client = &mut client.client;
-
-        let query = self
-            .pending_account_updates
-            .drain(..)
-            .map(|a| self.account_handlers.iter().map(|h| h.account_update(&a)).collect::<Vec<String>>().join(""))
-            .collect::<Vec<String>>()
-            .join("");
-        println!("QB: {}", query);
-
-        if let Err(err) = client.batch_execute(&query) {
-            return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
-                msg: format!("[build_pararallel_postgres_client] error=[{}]", err,),
-            })));
-        };
-
-        let mut measure = Measure::start("geyser-plugin-postgres-flush-slots-us");
-
-        for slot in &self.slots_at_startup {
-            Self::upsert_slot_status_internal(*slot, None, SlotStatus::Rooted, client, insert_slot_stmt)?;
-        }
-        measure.stop();
-
-        datapoint_info!(
-            "geyser_plugin_notify_account_restore_from_snapshot_summary",
-            ("flush_slots-us", measure.as_us(), i64),
-            ("flush-slots-counts", self.slots_at_startup.len(), i64),
-        );
-
-        self.slots_at_startup.clear();
-        Ok(())
-    }
 }
 
 impl PostgresClient for SimplePostgresClient {
@@ -214,7 +168,6 @@ impl PostgresClient for SimplePostgresClient {
             bs58::encode(account.owner()).into_string(),
             account.slot,
         );
-
         let client = &mut self.client.get_mut().unwrap().client;
         if is_startup {
             self.slots_at_startup.insert(account.slot as u64);
@@ -241,6 +194,21 @@ impl PostgresClient for SimplePostgresClient {
         }
 
         let query = self.account_handlers.iter().map(|h| h.account_update(&account)).collect::<Vec<String>>().join("");
+        if !query.is_empty() {
+            return match client.batch_execute(&query) {
+                Ok(_) => Ok(()),
+                Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
+                    msg: format!("[build_pararallel_postgres_client] error=[{}]", err,),
+                }))),
+            };
+        }
+        Ok(())
+    }
+
+    fn update_slot_status(&mut self, slot: u64, parent: Option<u64>, status: SlotStatus) -> Result<(), GeyserPluginError> {
+        info!("[update_slot_status] slot=[{:?}] status=[{:?}]", slot, status);
+        let client = &mut self.client.get_mut().unwrap().client;
+        let query = SlotHandler::update(slot, parent, status);
         println!("Q: {}", query);
         if !query.is_empty() {
             return match client.batch_execute(&query) {
@@ -254,21 +222,45 @@ impl PostgresClient for SimplePostgresClient {
         Ok(())
     }
 
-    fn update_slot_status(&mut self, slot: u64, parent: Option<u64>, status: SlotStatus) -> Result<(), GeyserPluginError> {
-        info!("[update_slot_status] slot=[{:?}] status=[{:?}]", slot, status);
-
+    fn notify_end_of_startup(&mut self) -> Result<(), GeyserPluginError> {
+        info!("[notify_end_of_startup]");
         let client = self.client.get_mut().unwrap();
+        let client = &mut client.client;
 
-        let statement = match parent {
-            Some(_) => &client.update_slot_with_parent_stmt,
-            None => &client.update_slot_without_parent_stmt,
+        // flush accounts
+        let query = self
+            .pending_account_updates
+            .drain(..)
+            .map(|a| self.account_handlers.iter().map(|h| h.account_update(&a)).collect::<Vec<String>>().join(""))
+            .collect::<Vec<String>>()
+            .join("");
+        if let Err(err) = client.batch_execute(&query) {
+            return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
+                msg: format!("[build_pararallel_postgres_client] error=[{}]", err,),
+            })));
         };
 
-        Self::upsert_slot_status_internal(slot, parent, status, &mut client.client, statement)
-    }
+        // flush slots
+        let mut measure = Measure::start("geyser-plugin-postgres-flush-slots-us");
+        let query = &self
+            .slots_at_startup
+            .drain()
+            .map(|s| SlotHandler::update(s, None, SlotStatus::Rooted))
+            .collect::<Vec<String>>()
+            .join("");
+        if let Err(err) = client.batch_execute(&query) {
+            return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
+                msg: format!("[build_pararallel_postgres_client] error=[{}]", err,),
+            })));
+        };
+        measure.stop();
 
-    fn notify_end_of_startup(&mut self) -> Result<(), GeyserPluginError> {
-        self.flush_buffered_writes()
+        datapoint_info!(
+            "geyser_plugin_notify_account_restore_from_snapshot_summary",
+            ("flush_slots-us", measure.as_us(), i64),
+            ("flush-slots-counts", self.slots_at_startup.len(), i64),
+        );
+        Ok(())
     }
 
     fn log_transaction(&mut self, transaction_info: DbTransaction) -> Result<(), GeyserPluginError> {
@@ -285,13 +277,12 @@ pub struct PostgresClientBuilder {}
 impl PostgresClientBuilder {
     pub fn build_pararallel_postgres_client(config: &GeyserPluginPostgresConfig) -> Result<(ParallelClient, Option<u64>), GeyserPluginError> {
         let mut client = SimplePostgresClient::connect_to_db(config)?;
-        init_slot(&mut client, config)?;
         init_block(&mut client, config)?;
         init_transaction(&mut client, config)?;
-        init_account_audit(&mut client, config)?;
 
         let account_handlers: Vec<Box<dyn AccountHandler>> = vec![Box::new(TokenAccountHandler {}), Box::new(UnknownAccountHandler {})];
-        let init_query = account_handlers.iter().map(|a| a.init(config)).collect::<Vec<String>>().join("");
+        let mut init_query = account_handlers.iter().map(|a| a.init(config)).collect::<Vec<String>>().join("");
+        init_query.push_str(&SlotHandler::init(config));
         if let Err(err) = client.batch_execute(&init_query) {
             return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
                 msg: format!("[build_pararallel_postgres_client] error=[{}]", err,),
@@ -300,11 +291,8 @@ impl PostgresClientBuilder {
 
         let batch_optimize_by_skiping_older_slots = match config.skip_upsert_existing_accounts_at_startup {
             true => {
-                let mut on_load_client = SimplePostgresClient::new(config)?;
-                // database if populated concurrently so we need to move some number of slots
-                // below highest available slot to make sure we do not skip anything that was already in DB.
-                let batch_slot_bound = on_load_client.get_highest_available_slot()?.saturating_sub(config.safe_batch_starting_slot_cushion);
-                info!("Set batch_optimize_by_skiping_older_slots to {}", batch_slot_bound);
+                let batch_slot_bound = SlotHandler::get_highest_available_slot(&mut client)?.saturating_sub(config.safe_batch_starting_slot_cushion);
+                info!("[batch_optimize_by_skiping_older_slots] bound={}", batch_slot_bound);
                 Some(batch_slot_bound)
             }
             false => None,

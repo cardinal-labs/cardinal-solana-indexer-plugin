@@ -42,7 +42,7 @@ impl AccountHandler for UnknownAccountHandler {
         return format!(
             "
                 INSERT INTO account AS acct (pubkey, slot, owner, lamports, executable, rent_epoch, data, write_version, updated_on, txn_signature) \
-                VALUES ('\\x{0}', {1}, '\\x{2}', {3}, {4}, {5}, '\\x{6}', {7}, '{8}', '\\x{9}') \
+                VALUES ('\\x{0}', {1}, '\\x{2}', {3}, {4}, {5}, '\\x{6}', {7}, '{8}', {9}) \
                 ON CONFLICT (pubkey) DO UPDATE SET
                     slot=excluded.slot, owner=excluded.owner, lamports=excluded.lamports, \
                     executable=excluded.executable, rent_epoch=excluded.rent_epoch, \
@@ -59,7 +59,7 @@ impl AccountHandler for UnknownAccountHandler {
             hex::encode(account.data()),
             &account.write_version(),
             &Utc::now().naive_utc(),
-            account.txn_signature().map_or("".to_string(), |tx| hex::encode(tx)),
+            account.txn_signature().map_or("NULL".to_string(), |tx| format!("'\\x{}'", hex::encode(tx))),
         );
     }
 }
