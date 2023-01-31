@@ -13,7 +13,7 @@ impl SlotHandler {
                 parent BIGINT,
                 status VARCHAR(16) NOT NULL,
                 updated_on TIMESTAMP NOT NULL
-            )
+            );
         "
         .to_string();
     }
