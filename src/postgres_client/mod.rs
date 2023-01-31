@@ -1,6 +1,6 @@
 mod account_handler;
 mod block_handler;
-mod postgres_client_transaction;
+mod transaction_handler;
 mod slot_handler;
 mod token_account_handler;
 mod unknown_account_handler;
@@ -9,7 +9,6 @@ use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
 use crate::parallel_client::ParallelClient;
 use crate::postgres_client::block_handler::BlockHandler;
-use crate::postgres_client::postgres_client_transaction::init_transaction;
 use crate::postgres_client::slot_handler::SlotHandler;
 use crate::postgres_client::token_account_handler::TokenAccountHandler;
 use log::*;
@@ -18,7 +17,6 @@ use openssl::ssl::SslFiletype;
 use openssl::ssl::SslMethod;
 use postgres::Client;
 use postgres::NoTls;
-use postgres::Statement;
 use postgres_openssl::MakeTlsConnector;
 use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
 use solana_geyser_plugin_interface::geyser_plugin_interface::SlotStatus;
@@ -32,22 +30,19 @@ use self::account_handler::AccountHandler;
 pub use self::account_handler::DbAccountInfo;
 pub use self::account_handler::ReadableAccountInfo;
 pub use self::block_handler::DbBlockInfo;
-pub use self::postgres_client_transaction::build_db_transaction;
-pub use self::postgres_client_transaction::DbTransaction;
+pub use self::transaction_handler::build_db_transaction;
+pub use self::transaction_handler::DbTransaction;
+use self::transaction_handler::TransactionHandler;
 use self::unknown_account_handler::UnknownAccountHandler;
-
-struct PostgresSqlClientWrapper {
-    client: Client,
-    update_transaction_log_stmt: Statement,
-}
 
 pub struct SimplePostgresClient {
     batch_size: usize,
     slots_at_startup: HashSet<u64>,
     pending_account_updates: Vec<DbAccountInfo>,
     block_handler: BlockHandler,
+    transaction_handler: TransactionHandler,
     account_handlers: Vec<Box<dyn AccountHandler>>,
-    client: Mutex<PostgresSqlClientWrapper>,
+    client: Mutex<Client>,
 }
 
 pub trait PostgresClient {
@@ -70,16 +65,16 @@ impl SimplePostgresClient {
     pub fn new(config: &GeyserPluginPostgresConfig) -> Result<Self, GeyserPluginError> {
         info!("[SimplePostgresClient] creating");
         let mut client = Self::connect_to_db(config)?;
-        let update_transaction_log_stmt = Self::build_transaction_info_upsert_statement(&mut client, config)?;
         let block_handler = BlockHandler::new(&mut client, config)?;
-
+        let transaction_handler = TransactionHandler::new(&mut client, config)?;
         let batch_size = config.batch_size;
         info!("[SimplePostgresClient] created");
         Ok(Self {
             batch_size,
-            pending_account_updates: Vec::with_capacity(batch_size),
-            client: Mutex::new(PostgresSqlClientWrapper { client, update_transaction_log_stmt }),
+            client: Mutex::new(client),
             block_handler,
+            transaction_handler,
+            pending_account_updates: Vec::with_capacity(batch_size),
             account_handlers: vec![Box::new(TokenAccountHandler {}), Box::new(UnknownAccountHandler {})],
             slots_at_startup: HashSet::default(),
         })
@@ -165,7 +160,7 @@ impl PostgresClient for SimplePostgresClient {
             bs58::encode(account.owner()).into_string(),
             account.slot,
         );
-        let client = &mut self.client.get_mut().unwrap().client;
+        let client = &mut self.client.get_mut().unwrap();
         if is_startup {
             self.slots_at_startup.insert(account.slot as u64);
             // flush if batch size
@@ -204,7 +199,7 @@ impl PostgresClient for SimplePostgresClient {
 
     fn update_slot_status(&mut self, slot: u64, parent: Option<u64>, status: SlotStatus) -> Result<(), GeyserPluginError> {
         info!("[update_slot_status] slot=[{:?}] status=[{:?}]", slot, status);
-        let client = &mut self.client.get_mut().unwrap().client;
+        let client = &mut self.client.get_mut().unwrap();
         let query = SlotHandler::update(slot, parent, status);
         println!("Q: {}", query);
         if !query.is_empty() {
@@ -222,7 +217,7 @@ impl PostgresClient for SimplePostgresClient {
     fn notify_end_of_startup(&mut self) -> Result<(), GeyserPluginError> {
         info!("[notify_end_of_startup]");
         // flush accounts
-        let client = &mut self.client.get_mut().unwrap().client;
+        let client = &mut self.client.get_mut().unwrap();
         let query = self
             .pending_account_updates
             .drain(..)
@@ -259,11 +254,11 @@ impl PostgresClient for SimplePostgresClient {
     }
 
     fn log_transaction(&mut self, transaction_info: DbTransaction) -> Result<(), GeyserPluginError> {
-        self.log_transaction_impl(transaction_info)
+        self.transaction_handler.update(&mut self.client.get_mut().unwrap(), transaction_info)
     }
 
     fn update_block_metadata(&mut self, block_info: DbBlockInfo) -> Result<(), GeyserPluginError> {
-        self.block_handler.update(&mut self.client.get_mut().unwrap().client, block_info)
+        self.block_handler.update(&mut self.client.get_mut().unwrap(), block_info)
     }
 }
 
@@ -273,11 +268,11 @@ impl PostgresClientBuilder {
     pub fn build_pararallel_postgres_client(config: &GeyserPluginPostgresConfig) -> Result<(ParallelClient, Option<u64>), GeyserPluginError> {
         let mut client = SimplePostgresClient::connect_to_db(config)?;
 
-        init_transaction(&mut client, config)?;
         let account_handlers: Vec<Box<dyn AccountHandler>> = vec![Box::new(TokenAccountHandler {}), Box::new(UnknownAccountHandler {})];
         let mut init_query = account_handlers.iter().map(|a| a.init(config)).collect::<Vec<String>>().join("");
         init_query.push_str(&SlotHandler::init(config));
         init_query.push_str(&BlockHandler::init(config));
+        init_query.push_str(&TransactionHandler::init(config));
         if let Err(err) = client.batch_execute(&init_query) {
             return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
                 msg: format!("[build_pararallel_postgres_client] error=[{}]", err,),

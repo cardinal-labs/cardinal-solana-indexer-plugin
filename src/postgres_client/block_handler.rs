@@ -7,7 +7,7 @@ use postgres::Statement;
 use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
 use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaBlockInfo;
 
-use super::postgres_client_transaction::DbReward;
+use super::transaction_handler::DbReward;
 
 #[derive(Clone, Debug)]
 pub struct DbBlockInfo {
@@ -43,10 +43,7 @@ impl BlockHandler {
         match client.prepare(stmt) {
             Ok(statement) => Ok(BlockHandler { upsert_statement: statement }),
             Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
-                msg: format!(
-                    "Error in preparing for the block metadata update PostgreSQL database: ({}) host: {:?} user: {:?} config: {:?}",
-                    err, config.host, config.user, config
-                ),
+                msg: format!("[block_handler::new] error={}", err),
             }))),
         }
     }

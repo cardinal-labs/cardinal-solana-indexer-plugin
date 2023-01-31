@@ -1,6 +1,5 @@
 use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
-use crate::postgres_client::SimplePostgresClient;
 use chrono::Utc;
 use log::*;
 use postgres::Client;
@@ -413,251 +412,240 @@ pub fn build_db_transaction(slot: u64, transaction_info: &ReplicaTransactionInfo
     }
 }
 
-pub fn init_transaction(client: &mut Client, _config: &GeyserPluginPostgresConfig) -> Result<(), GeyserPluginError> {
-    let result = client.batch_execute(
-        "
-        DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TransactionErrorCode') THEN
-                CREATE TYPE \"TransactionErrorCode\" AS ENUM (
-                    'AccountInUse',
-                    'AccountLoadedTwice',
-                    'AccountNotFound',
-                    'ProgramAccountNotFound',
-                    'InsufficientFundsForFee',
-                    'InvalidAccountForFee',
-                    'AlreadyProcessed',
-                    'BlockhashNotFound',
-                    'InstructionError',
-                    'CallChainTooDeep',
-                    'MissingSignatureForFee',
-                    'InvalidAccountIndex',
-                    'SignatureFailure',
-                    'InvalidProgramForExecution',
-                    'SanitizeFailure',
-                    'ClusterMaintenance',
-                    'AccountBorrowOutstanding',
-                    'WouldExceedMaxAccountCostLimit',
-                    'WouldExceedMaxBlockCostLimit',
-                    'UnsupportedVersion',
-                    'InvalidWritableAccount',
-                    'WouldExceedMaxAccountDataCostLimit',
-                    'TooManyAccountLocks',
-                    'AddressLookupTableNotFound',
-                    'InvalidAddressLookupTableOwner',
-                    'InvalidAddressLookupTableData',
-                    'InvalidAddressLookupTableIndex',
-                    'InvalidRentPayingAccount',
-                    'WouldExceedMaxVoteCostLimit',
-                    'WouldExceedAccountDataBlockLimit',
-                    'WouldExceedAccountDataTotalLimit',
-                    'DuplicateInstruction',
-                    'InsufficientFundsForRent'
-                );
-            END IF;
-        END $$;
-
-        DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TransactionError') THEN
-                CREATE TYPE \"TransactionError\" AS (
-                    error_code \"TransactionErrorCode\",
-                    error_detail VARCHAR(256)
-                );
-            END IF;
-        END $$;            
-
-        
-        DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'CompiledInstruction') THEN
-                CREATE TYPE \"CompiledInstruction\" AS (
-                    program_id_index SMALLINT,
-                    accounts SMALLINT[],
-                    data BYTEA
-                );
-            END IF;
-        END $$;
-
-        DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'InnerInstructions') THEN
-                CREATE TYPE \"InnerInstructions\" AS (
-                    index SMALLINT,
-                    instructions \"CompiledInstruction\"[]
-                );
-            END IF;
-        END $$;
-
-        DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TransactionTokenBalance') THEN
-                CREATE TYPE \"TransactionTokenBalance\" AS (
-                    account_index SMALLINT,
-                    mint VARCHAR(44),
-                    ui_token_amount DOUBLE PRECISION,
-                    owner VARCHAR(44)
-                );
-            END IF;
-        END $$;
-        
-        DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'RewardType') THEN
-                CREATE TYPE \"RewardType\" AS ENUM (
-                    'Fee',
-                    'Rent',
-                    'Staking',
-                    'Voting'
-                );
-            END IF;
-        END $$;
-
-        DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'Reward') THEN
-                CREATE TYPE \"Reward\" AS (
-                    pubkey VARCHAR(44),
-                    lamports BIGINT,
-                    post_balance BIGINT,
-                    reward_type \"RewardType\",
-                    commission SMALLINT
-                );
-            END IF;
-        END $$;
-
-        DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TransactionStatusMeta') THEN
-                CREATE TYPE \"TransactionStatusMeta\" AS (
-                    error \"TransactionError\",
-                    fee BIGINT,
-                    pre_balances BIGINT[],
-                    post_balances BIGINT[],
-                    inner_instructions \"InnerInstructions\"[],
-                    log_messages TEXT[],
-                    pre_token_balances \"TransactionTokenBalance\"[],
-                    post_token_balances \"TransactionTokenBalance\"[],
-                    rewards \"Reward\"[]
-                );
-            END IF;
-        END $$;
-
-        DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TransactionMessageHeader') THEN
-                CREATE TYPE \"TransactionMessageHeader\" AS (
-                    num_required_signatures SMALLINT,
-                    num_readonly_signed_accounts SMALLINT,
-                    num_readonly_unsigned_accounts SMALLINT
-                );
-            END IF;
-        END $$;
-
-        DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TransactionMessage') THEN
-                CREATE TYPE \"TransactionMessage\" AS (
-                    header \"TransactionMessageHeader\",
-                    account_keys BYTEA[],
-                    recent_blockhash BYTEA,
-                    instructions \"CompiledInstruction\"[]
-                );
-            END IF;
-        END $$;
-
-        DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TransactionMessageAddressTableLookup') THEN
-                CREATE TYPE \"TransactionMessageAddressTableLookup\" AS (
-                    account_key BYTEA,
-                    writable_indexes SMALLINT[],
-                    readonly_indexes SMALLINT[]
-                );
-            END IF;
-        END $$;
-
-        DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TransactionMessageV0') THEN
-                CREATE TYPE \"TransactionMessageV0\" AS (
-                    header \"TransactionMessageHeader\",
-                    account_keys BYTEA[],
-                    recent_blockhash BYTEA,
-                    instructions \"CompiledInstruction\"[],
-                    address_table_lookups \"TransactionMessageAddressTableLookup\"[]
-                );
-            END IF;
-        END $$;
-
-        DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'LoadedAddresses') THEN
-                CREATE TYPE \"LoadedAddresses\" AS (
-                    writable BYTEA[],
-                    readonly BYTEA[]
-                );
-            END IF;
-        END $$;
-
-        DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'LoadedMessageV0') THEN
-                CREATE TYPE \"LoadedMessageV0\" AS (
-                    message \"TransactionMessageV0\",
-                    loaded_addresses \"LoadedAddresses\"
-                );
-            END IF;
-        END $$;
-        
-        CREATE TABLE IF NOT EXISTS transaction (
-            slot BIGINT NOT NULL,
-            signature BYTEA NOT NULL,
-            is_vote BOOL NOT NULL,
-            message_type SMALLINT, -- 0: legacy, 1: v0 message
-            legacy_message \"TransactionMessage\",
-            v0_loaded_message \"LoadedMessageV0\",
-            signatures BYTEA[],
-            message_hash BYTEA,
-            meta \"TransactionStatusMeta\",
-            write_version BIGINT,
-            updated_on TIMESTAMP NOT NULL,
-            index BIGINT NOT NULL,
-            CONSTRAINT transaction_pk PRIMARY KEY (slot, signature)
-        );        
-        ",
-    );
-    match result {
-        Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
-            msg: format!("[init_transaction] error={:?}", err),
-        }))),
-        Ok(_) => Ok(()),
-    }
+pub struct TransactionHandler {
+    pub upsert_statement: Statement,
 }
 
-impl SimplePostgresClient {
-    pub(crate) fn build_transaction_info_upsert_statement(client: &mut Client, config: &GeyserPluginPostgresConfig) -> Result<Statement, GeyserPluginError> {
-        let stmt = "INSERT INTO transaction AS txn (signature, is_vote, slot, message_type, legacy_message, \
-        v0_loaded_message, signatures, message_hash, meta, write_version, index, updated_on) \
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) \
-        ON CONFLICT (slot, signature) DO UPDATE SET is_vote=excluded.is_vote, \
-        message_type=excluded.message_type, \
-        legacy_message=excluded.legacy_message, \
-        v0_loaded_message=excluded.v0_loaded_message, \
-        signatures=excluded.signatures, \
-        message_hash=excluded.message_hash, \
-        meta=excluded.meta, \
-        write_version=excluded.write_version, \
-        index=excluded.index,
-        updated_on=excluded.updated_on";
-
-        let stmt = client.prepare(stmt);
-
-        match stmt {
+impl TransactionHandler {
+    pub fn new(client: &mut Client, _config: &GeyserPluginPostgresConfig) -> Result<TransactionHandler, GeyserPluginError> {
+        let stmt = "
+            INSERT INTO transaction AS txn (signature, is_vote, slot, message_type, \
+                legacy_message, v0_loaded_message, signatures, message_hash, meta, \
+                write_version, index, updated_on) \
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) \
+            ON CONFLICT (slot, signature) DO UPDATE SET is_vote=excluded.is_vote, \
+                message_type=excluded.message_type, \
+                legacy_message=excluded.legacy_message, \
+                v0_loaded_message=excluded.v0_loaded_message, \
+                signatures=excluded.signatures, \
+                message_hash=excluded.message_hash, \
+                meta=excluded.meta, \
+                write_version=excluded.write_version, \
+                index=excluded.index,
+                updated_on=excluded.updated_on
+        ";
+        match client.prepare(stmt) {
+            Ok(statement) => Ok(TransactionHandler { upsert_statement: statement }),
             Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
-                msg: format!(
-                    "Error in preparing for the transaction update PostgreSQL database: ({}) host: {:?} user: {:?} config: {:?}",
-                    err, config.host, config.user, config
-                ),
+                msg: format!("[transction_handler::new] error=[{}]", err),
             }))),
-            Ok(stmt) => Ok(stmt),
         }
     }
 
-    pub(crate) fn log_transaction_impl(&mut self, transaction_info: DbTransaction) -> Result<(), GeyserPluginError> {
-        let client = self.client.get_mut().unwrap();
-        let statement = &client.update_transaction_log_stmt;
-        let client = &mut client.client;
-        let updated_on = Utc::now().naive_utc();
+    pub fn init(_config: &crate::config::GeyserPluginPostgresConfig) -> String {
+        return "
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TransactionErrorCode') THEN
+                    CREATE TYPE \"TransactionErrorCode\" AS ENUM (
+                        'AccountInUse',
+                        'AccountLoadedTwice',
+                        'AccountNotFound',
+                        'ProgramAccountNotFound',
+                        'InsufficientFundsForFee',
+                        'InvalidAccountForFee',
+                        'AlreadyProcessed',
+                        'BlockhashNotFound',
+                        'InstructionError',
+                        'CallChainTooDeep',
+                        'MissingSignatureForFee',
+                        'InvalidAccountIndex',
+                        'SignatureFailure',
+                        'InvalidProgramForExecution',
+                        'SanitizeFailure',
+                        'ClusterMaintenance',
+                        'AccountBorrowOutstanding',
+                        'WouldExceedMaxAccountCostLimit',
+                        'WouldExceedMaxBlockCostLimit',
+                        'UnsupportedVersion',
+                        'InvalidWritableAccount',
+                        'WouldExceedMaxAccountDataCostLimit',
+                        'TooManyAccountLocks',
+                        'AddressLookupTableNotFound',
+                        'InvalidAddressLookupTableOwner',
+                        'InvalidAddressLookupTableData',
+                        'InvalidAddressLookupTableIndex',
+                        'InvalidRentPayingAccount',
+                        'WouldExceedMaxVoteCostLimit',
+                        'WouldExceedAccountDataBlockLimit',
+                        'WouldExceedAccountDataTotalLimit',
+                        'DuplicateInstruction',
+                        'InsufficientFundsForRent'
+                    );
+                END IF;
+            END $$;
 
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TransactionError') THEN
+                    CREATE TYPE \"TransactionError\" AS (
+                        error_code \"TransactionErrorCode\",
+                        error_detail VARCHAR(256)
+                    );
+                END IF;
+            END $$;            
+
+            
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'CompiledInstruction') THEN
+                    CREATE TYPE \"CompiledInstruction\" AS (
+                        program_id_index SMALLINT,
+                        accounts SMALLINT[],
+                        data BYTEA
+                    );
+                END IF;
+            END $$;
+
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'InnerInstructions') THEN
+                    CREATE TYPE \"InnerInstructions\" AS (
+                        index SMALLINT,
+                        instructions \"CompiledInstruction\"[]
+                    );
+                END IF;
+            END $$;
+
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TransactionTokenBalance') THEN
+                    CREATE TYPE \"TransactionTokenBalance\" AS (
+                        account_index SMALLINT,
+                        mint VARCHAR(44),
+                        ui_token_amount DOUBLE PRECISION,
+                        owner VARCHAR(44)
+                    );
+                END IF;
+            END $$;
+            
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'RewardType') THEN
+                    CREATE TYPE \"RewardType\" AS ENUM (
+                        'Fee',
+                        'Rent',
+                        'Staking',
+                        'Voting'
+                    );
+                END IF;
+            END $$;
+
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'Reward') THEN
+                    CREATE TYPE \"Reward\" AS (
+                        pubkey VARCHAR(44),
+                        lamports BIGINT,
+                        post_balance BIGINT,
+                        reward_type \"RewardType\",
+                        commission SMALLINT
+                    );
+                END IF;
+            END $$;
+
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TransactionStatusMeta') THEN
+                    CREATE TYPE \"TransactionStatusMeta\" AS (
+                        error \"TransactionError\",
+                        fee BIGINT,
+                        pre_balances BIGINT[],
+                        post_balances BIGINT[],
+                        inner_instructions \"InnerInstructions\"[],
+                        log_messages TEXT[],
+                        pre_token_balances \"TransactionTokenBalance\"[],
+                        post_token_balances \"TransactionTokenBalance\"[],
+                        rewards \"Reward\"[]
+                    );
+                END IF;
+            END $$;
+
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TransactionMessageHeader') THEN
+                    CREATE TYPE \"TransactionMessageHeader\" AS (
+                        num_required_signatures SMALLINT,
+                        num_readonly_signed_accounts SMALLINT,
+                        num_readonly_unsigned_accounts SMALLINT
+                    );
+                END IF;
+            END $$;
+
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TransactionMessage') THEN
+                    CREATE TYPE \"TransactionMessage\" AS (
+                        header \"TransactionMessageHeader\",
+                        account_keys BYTEA[],
+                        recent_blockhash BYTEA,
+                        instructions \"CompiledInstruction\"[]
+                    );
+                END IF;
+            END $$;
+
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TransactionMessageAddressTableLookup') THEN
+                    CREATE TYPE \"TransactionMessageAddressTableLookup\" AS (
+                        account_key BYTEA,
+                        writable_indexes SMALLINT[],
+                        readonly_indexes SMALLINT[]
+                    );
+                END IF;
+            END $$;
+
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TransactionMessageV0') THEN
+                    CREATE TYPE \"TransactionMessageV0\" AS (
+                        header \"TransactionMessageHeader\",
+                        account_keys BYTEA[],
+                        recent_blockhash BYTEA,
+                        instructions \"CompiledInstruction\"[],
+                        address_table_lookups \"TransactionMessageAddressTableLookup\"[]
+                    );
+                END IF;
+            END $$;
+
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'LoadedAddresses') THEN
+                    CREATE TYPE \"LoadedAddresses\" AS (
+                        writable BYTEA[],
+                        readonly BYTEA[]
+                    );
+                END IF;
+            END $$;
+
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'LoadedMessageV0') THEN
+                    CREATE TYPE \"LoadedMessageV0\" AS (
+                        message \"TransactionMessageV0\",
+                        loaded_addresses \"LoadedAddresses\"
+                    );
+                END IF;
+            END $$;
+            
+            CREATE TABLE IF NOT EXISTS transaction (
+                slot BIGINT NOT NULL,
+                signature BYTEA NOT NULL,
+                is_vote BOOL NOT NULL,
+                message_type SMALLINT, -- 0: legacy, 1: v0 message
+                legacy_message \"TransactionMessage\",
+                v0_loaded_message \"LoadedMessageV0\",
+                signatures BYTEA[],
+                message_hash BYTEA,
+                meta \"TransactionStatusMeta\",
+                write_version BIGINT,
+                updated_on TIMESTAMP NOT NULL,
+                index BIGINT NOT NULL,
+                CONSTRAINT transaction_pk PRIMARY KEY (slot, signature)
+            );
+        "
+        .to_string();
+    }
+
+    pub fn update(&self, client: &mut Client, transaction_info: DbTransaction) -> Result<(), GeyserPluginError> {
         let result = client.query(
-            statement,
+            &self.upsert_statement,
             &[
                 &transaction_info.signature,
                 &transaction_info.is_vote,
@@ -670,10 +658,9 @@ impl SimplePostgresClient {
                 &transaction_info.meta,
                 &transaction_info.write_version,
                 &transaction_info.index,
-                &updated_on,
+                &Utc::now().naive_utc(),
             ],
         );
-
         if let Err(err) = result {
             let msg = format!("Failed to persist the update of transaction info to the PostgreSQL database. Error: {:?}", err);
             error!("{}", msg);
