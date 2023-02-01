@@ -73,7 +73,7 @@ Or use the following to select accounts with certain program owners:
     }
 ```
 
-To select all accounts, use the wildcard character (*):
+To select all accounts, use the wildcard character (\*):
 
 ```
     "accounts_selector" : {
@@ -126,6 +126,7 @@ wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-
 sudo apt-get update
 sudo apt-get -y install postgresql-14
 ```
+
 #### Control the Database Access
 
 Modify the pg_hba.conf as necessary to grant the plugin to access the database.
@@ -188,82 +189,20 @@ SQL commands can be entered:
 psql -U solana -p 5433 -h 10.138.0.9 -w -d solana
 ```
 
-#### Create the Schema Objects
-
-Use the scripts/create_schema.sql
-
-```
-psql -U solana -p 5433 -h 10.138.0.9 -w -d solana -f scripts/create_schema.sql
-```
-
 After this, start the validator with the plugin by using the `--geyser-plugin-config`
 argument mentioned above.
-
-#### Destroy the Schema Objects
-
-To destroy the database objects, created by `create_schema.sql`, use
-drop_schema.sql. For example,
-
-```
-psql -U solana -p 5433 -h 10.138.0.9 -w -d solana -f scripts/drop_schema.sql
-```
-
-### Capture Historical Account Data
-
-To capture account historical data, in the configuration file, turn
-`store_account_historical_data` to true.
-
-And ensure the database trigger is created to save data in the `audit_table` when
-records in `account` are updated, as shown in `create_schema.sql`,
-
-```
-CREATE FUNCTION audit_account_update() RETURNS trigger AS $audit_account_update$
-    BEGIN
-		INSERT INTO account_audit (pubkey, owner, lamports, slot, executable, rent_epoch, data, write_version, updated_on)
-            VALUES (OLD.pubkey, OLD.owner, OLD.lamports, OLD.slot,
-                    OLD.executable, OLD.rent_epoch, OLD.data, OLD.write_version, OLD.updated_on);
-        RETURN NEW;
-    END;
-
-$audit_account_update$ LANGUAGE plpgsql;
-
-CREATE TRIGGER account_update_trigger AFTER UPDATE OR DELETE ON account
-    FOR EACH ROW EXECUTE PROCEDURE audit_account_update();
-```
-
-The trigger can be dropped to disable this feature, for example,
-
-```
-DROP TRIGGER account_update_trigger ON account;
-```
-
-Over time, the account_audit can accumulate large amount of data. You may choose to
-limit that by deleting older historical data.
-
-For example, the following SQL statement can be used to keep up to 1000 of the most
-recent records for an account:
-
-```
-delete from account_audit a2 where (pubkey, write_version) in
-    (select pubkey, write_version from
-        (select a.pubkey, a.updated_on, a.slot, a.write_version, a.lamports,
-            rank() OVER ( partition by pubkey order by write_version desc) as rnk
-            from account_audit a) ranked
-            where ranked.rnk > 1000)
-```
 
 ### Main Tables
 
 The following are the tables in the Postgres database
 
 | Table         | Description             |
-|:--------------|:------------------------|
+| :------------ | :---------------------- |
 | account       | Account data            |
 | block         | Block metadata          |
 | slot          | Slot metadata           |
 | transaction   | Transaction data        |
 | account_audit | Account historical data |
-
 
 ### Performance Considerations
 
