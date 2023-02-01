@@ -2,7 +2,9 @@ use solana_sdk::pubkey;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::pubkey::PUBKEY_BYTES;
 
-use super::{account_handler::AccountHandler, DbAccountInfo, ReadableAccountInfo};
+use super::account_handler::AccountHandler;
+use super::DbAccountInfo;
+use super::ReadableAccountInfo;
 
 pub static TOKEN_PROGRAM_ID: Pubkey = pubkey!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 pub static TOKENZ_PROGRAM_ID: Pubkey = pubkey!("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
