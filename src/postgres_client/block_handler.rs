@@ -35,7 +35,7 @@ pub struct BlockHandler {
 }
 
 impl BlockHandler {
-    pub fn new(client: &mut Client, config: &GeyserPluginPostgresConfig) -> Result<BlockHandler, GeyserPluginError> {
+    pub fn new(client: &mut Client, _config: &GeyserPluginPostgresConfig) -> Result<BlockHandler, GeyserPluginError> {
         let stmt = "INSERT INTO block (slot, blockhash, rewards, block_time, block_height, updated_on) \
         VALUES ($1, $2, $3, $4, $5, $6) \
         ON CONFLICT (slot) DO UPDATE SET blockhash=excluded.blockhash, rewards=excluded.rewards, \

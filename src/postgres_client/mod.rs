@@ -1,8 +1,8 @@
 mod account_handler;
 mod block_handler;
-mod transaction_handler;
 mod slot_handler;
 mod token_account_handler;
+mod transaction_handler;
 mod unknown_account_handler;
 
 use crate::config::GeyserPluginPostgresConfig;
@@ -81,20 +81,6 @@ impl SimplePostgresClient {
     }
 
     pub fn connect_to_db(config: &GeyserPluginPostgresConfig) -> Result<Client, GeyserPluginError> {
-        let connection_str = match &config.connection_str {
-            Some(connection_str) => connection_str.clone(),
-            None => {
-                if config.host.is_none() || config.user.is_none() {
-                    let msg = format!(
-                        "\"connection_str\": {:?}, or \"host\": {:?} \"user\": {:?} must be specified",
-                        config.connection_str, config.host, config.user
-                    );
-                    return Err(GeyserPluginError::ConfigFileReadError { msg });
-                }
-                format!("host={} user={} port={}", config.host.as_ref().unwrap(), config.user.as_ref().unwrap(), config.port)
-            }
-        };
-
         let result = match config.use_ssl {
             Some(true) => {
                 if config.server_ca.is_none() {
@@ -136,17 +122,14 @@ impl SimplePostgresClient {
                     connect_config.set_verify_hostname(false);
                     Ok(())
                 });
-                Client::connect(&connection_str, connector)
+                Client::connect(&config.connection_str, connector)
             }
-            _ => Client::connect(&connection_str, NoTls),
+            _ => Client::connect(&config.connection_str, NoTls),
         };
-
         match result {
-            Err(err) => {
-                let msg = format!("Error in connecting to the PostgreSQL database: {:?} connection_str: {:?}", err, connection_str);
-                error!("{}", msg);
-                Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConnectionError { msg })))
-            }
+            Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::ConnectionError {
+                msg: format!("[connect_to_db] connection_str={} error={}", config.connection_str, err),
+            }))),
             Ok(client) => Ok(client),
         }
     }

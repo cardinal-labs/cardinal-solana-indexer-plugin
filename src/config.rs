@@ -26,10 +26,7 @@ use std::path::Path;
 /// "accounts_selector" : {
 ///     "accounts" : \["*"\],
 /// }
-/// * "host", optional, specifies the PostgreSQL server.
-/// * "user", optional, specifies the PostgreSQL user.
-/// * "port", optional, specifies the PostgreSQL server's port.
-/// * "connection_str", optional, the custom PostgreSQL connection string.
+/// * "connection_str", the custom PostgreSQL connection string.
 /// Please refer to https://docs.rs/postgres/0.19.2/postgres/config/struct.Config.html for the connection configuration.
 /// When `connection_str` is set, the values in "host", "user" and "port" are ignored. If `connection_str` is not given,
 /// `host` and `user` must be given.
@@ -69,18 +66,9 @@ use std::path::Path;
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GeyserPluginPostgresConfig {
-    /// The host name or IP of the PostgreSQL server
-    pub host: Option<String>,
-
-    /// The user name of the PostgreSQL server.
-    pub user: Option<String>,
-
-    /// The port number of the PostgreSQL database, the default is 5432
-    pub port: u16,
-
     /// The connection string of PostgreSQL database, if this is set
     /// `host`, `user` and `port` will be ignored.
-    pub connection_str: Option<String>,
+    pub connection_str: String,
 
     /// Accounts to listen to
     pub accounts_selector: Option<AccountsSelectorConfig>,
@@ -100,9 +88,6 @@ pub struct GeyserPluginPostgresConfig {
     /// Controls whether to panic the validator in case of errors
     /// writing to PostgreSQL server. The default is false
     pub panic_on_db_errors: bool,
-
-    /// Indicates whether to store historical data for accounts
-    pub store_account_historical_data: bool,
 
     /// Controls whether to use SSL based connection to the database server.
     /// The default is false
@@ -129,16 +114,12 @@ pub struct GeyserPluginPostgresConfig {
 impl Default for GeyserPluginPostgresConfig {
     fn default() -> Self {
         Self {
-            host: None,
-            port: 5432,
-            user: None,
-            connection_str: None,
+            connection_str: "".to_string(),
             accounts_selector: None,
             transaction_selector: None,
             threads: 10,
             batch_size: 10,
             panic_on_db_errors: false,
-            store_account_historical_data: false,
             use_ssl: None,
             server_ca: None,
             client_cert: None,
