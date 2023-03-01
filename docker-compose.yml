@@ -8,5 +8,3 @@ services:
       - POSTGRES_PASSWORD=solana
     ports:
       - '5432:5432'
-    volumes:
-      - ./scripts/create_schema.sql:/docker-entrypoint-initdb.d/scripts/create_schema.sql
