@@ -60,9 +60,9 @@ impl GeyserPlugin for GeyserPluginPostgres {
         solana_logger::setup_with_default("info");
         info!("[on_load] name=[{:?}] config_file=[{:?}]", self.name(), config_file);
         let config = GeyserPluginPostgresConfig::read_from(config_file)?;
-        let (client, batch_optimize_by_skiping_older_slots) = PostgresClientBuilder::build_pararallel_postgres_client(&config)?;
+        let (client, batch_starting_slot) = PostgresClientBuilder::build_pararallel_postgres_client(&config)?;
         self.client = Some(client);
-        self.batch_starting_slot = batch_optimize_by_skiping_older_slots;
+        self.batch_starting_slot = batch_starting_slot;
         self.accounts_selector = config.accounts_selector.as_ref().map(AccountsSelector::new);
         self.transaction_selector = config.transaction_selector.as_ref().map(TransactionSelector::new);
         self.config = Some(config);
@@ -81,7 +81,7 @@ impl GeyserPlugin for GeyserPluginPostgres {
 
     fn update_account(&mut self, account: ReplicaAccountInfoVersions, slot: u64, is_startup: bool) -> Result<()> {
         info!("[update_account]");
-        // skip updating account on startup of batch_optimize_by_skiping_older_slots is configured
+        // skip updating account on startup of batch_starting_slot is configured
         if is_startup && self.batch_starting_slot.map(|slot_limit| slot < slot_limit).unwrap_or(false) {
             return Ok(());
         }

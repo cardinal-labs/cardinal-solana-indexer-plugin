@@ -154,7 +154,6 @@ impl PostgresClient for SimplePostgresClient {
                     .map(|a| self.account_handlers.iter().map(|h| h.account_update(&a)).collect::<Vec<String>>().join(""))
                     .collect::<Vec<String>>()
                     .join("");
-                println!("QB: {}", query);
 
                 if let Err(err) = client.batch_execute(&query) {
                     return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
@@ -184,7 +183,6 @@ impl PostgresClient for SimplePostgresClient {
         info!("[update_slot_status] slot=[{:?}] status=[{:?}]", slot, status);
         let client = &mut self.client.get_mut().unwrap();
         let query = SlotHandler::update(slot, parent, status);
-        println!("Q: {}", query);
         if !query.is_empty() {
             return match client.batch_execute(&query) {
                 Ok(_) => Ok(()),
@@ -262,15 +260,15 @@ impl PostgresClientBuilder {
             })));
         };
 
-        let batch_optimize_by_skiping_older_slots = match config.skip_upsert_existing_accounts_at_startup {
+        let batch_starting_slot = match config.skip_upsert_existing_accounts_at_startup {
             true => {
                 let batch_slot_bound = SlotHandler::get_highest_available_slot(&mut client)?.saturating_sub(config.safe_batch_starting_slot_cushion);
-                info!("[batch_optimize_by_skiping_older_slots] bound={}", batch_slot_bound);
+                info!("[batch_starting_slot] bound={}", batch_slot_bound);
                 Some(batch_slot_bound)
             }
             false => None,
         };
 
-        ParallelClient::new(config).map(|v| (v, batch_optimize_by_skiping_older_slots))
+        ParallelClient::new(config).map(|v| (v, batch_starting_slot))
     }
 }
