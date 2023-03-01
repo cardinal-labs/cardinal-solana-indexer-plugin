@@ -4,7 +4,6 @@ use solana_sdk::pubkey::PUBKEY_BYTES;
 
 use super::account_handler::AccountHandler;
 use super::DbAccountInfo;
-use super::ReadableAccountInfo;
 
 pub static TOKEN_PROGRAM_ID: Pubkey = pubkey!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 pub static TOKENZ_PROGRAM_ID: Pubkey = pubkey!("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
@@ -52,8 +51,8 @@ impl AccountHandler for TokenAccountHandler {
     }
 
     fn account_match(&self, account: &DbAccountInfo) -> bool {
-        account.owner() == TOKEN_PROGRAM_ID.as_ref() && account.data.len() == SPL_TOKEN_ACCOUNT_LENGTH
-            || account.owner() == TOKENZ_PROGRAM_ID.as_ref() && SPL_TOKEN_ACCOUNT_DISCRIMINATOR == *account.data.get(SPL_TOKEN_ACCOUNT_LENGTH).unwrap_or(&0)
+        account.owner == TOKEN_PROGRAM_ID.as_ref() && account.data.len() == SPL_TOKEN_ACCOUNT_LENGTH
+            || account.owner == TOKENZ_PROGRAM_ID.as_ref() && SPL_TOKEN_ACCOUNT_DISCRIMINATOR == *account.data.get(SPL_TOKEN_ACCOUNT_LENGTH).unwrap_or(&0)
     }
 
     fn account_update(&self, account: &DbAccountInfo) -> String {
@@ -62,7 +61,7 @@ impl AccountHandler for TokenAccountHandler {
         };
         let mint: &Pubkey = bytemuck::from_bytes(&account.data[SPL_TOKEN_ACCOUNT_MINT_OFFSET..SPL_TOKEN_ACCOUNT_MINT_OFFSET + PUBKEY_BYTES]);
         let owner: &Pubkey = bytemuck::from_bytes(&account.data[SPL_TOKEN_ACCOUNT_OWNER_OFFSET..SPL_TOKEN_ACCOUNT_OWNER_OFFSET + PUBKEY_BYTES]);
-        let pubkey = Pubkey::new(account.pubkey());
+        let pubkey = Pubkey::new(&account.pubkey);
         let slot = account.slot;
         return format!(
             "

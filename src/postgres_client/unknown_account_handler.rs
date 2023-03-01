@@ -1,6 +1,5 @@
 use super::account_handler::AccountHandler;
 use super::DbAccountInfo;
-use super::ReadableAccountInfo;
 use chrono::Utc;
 
 pub struct UnknownAccountHandler {}
@@ -52,16 +51,16 @@ impl AccountHandler for UnknownAccountHandler {
                     txn_signature=excluded.txn_signature \
                 WHERE acct.slot < excluded.slot OR (acct.slot = excluded.slot AND acct.write_version < excluded.write_version);
             ",
-            hex::encode(account.pubkey()),
+            hex::encode(&account.pubkey),
             &account.slot,
-            hex::encode(account.owner()),
+            hex::encode(&account.owner),
             &account.lamports,
-            &account.executable(),
+            &account.executable,
             &account.rent_epoch,
-            hex::encode(account.data()),
-            &account.write_version(),
+            hex::encode(&account.data),
+            &account.write_version,
             &Utc::now().naive_utc(),
-            account.txn_signature().map_or("NULL".to_string(), |tx| format!("'\\x{}'", hex::encode(tx))),
+            account.txn_signature.as_deref().map_or("NULL".to_string(), |tx| format!("'\\x{}'", hex::encode(tx))),
         );
     }
 }

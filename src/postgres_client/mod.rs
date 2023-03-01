@@ -28,7 +28,6 @@ use std::thread;
 
 use self::account_handler::AccountHandler;
 pub use self::account_handler::DbAccountInfo;
-pub use self::account_handler::ReadableAccountInfo;
 pub use self::block_handler::DbBlockInfo;
 pub use self::transaction_handler::build_db_transaction;
 pub use self::transaction_handler::DbTransaction;
@@ -139,8 +138,8 @@ impl PostgresClient for SimplePostgresClient {
     fn update_account(&mut self, account: DbAccountInfo, is_startup: bool) -> Result<(), GeyserPluginError> {
         trace!(
             "[update_account] account=[{}] owner=[{}] slot=[{}]",
-            bs58::encode(account.pubkey()).into_string(),
-            bs58::encode(account.owner()).into_string(),
+            bs58::encode(&account.pubkey).into_string(),
+            bs58::encode(&account.owner).into_string(),
             account.slot,
         );
         let client = &mut self.client.get_mut().unwrap();

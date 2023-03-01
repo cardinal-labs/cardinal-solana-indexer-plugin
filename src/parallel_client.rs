@@ -9,7 +9,6 @@ use crate::parallel_client_worker::WorkRequest;
 use crate::postgres_client::build_db_transaction;
 use crate::postgres_client::DbAccountInfo;
 use crate::postgres_client::DbBlockInfo;
-use crate::postgres_client::ReadableAccountInfo;
 use crossbeam_channel::bounded;
 use crossbeam_channel::Sender;
 use log::*;
@@ -131,7 +130,7 @@ impl ParallelClient {
         let mut measure = Measure::start("geyser-plugin-posgres-send-msg");
         if let Err(err) = self.sender.send(wrk_item) {
             return Err(GeyserPluginError::AccountsUpdateError {
-                msg: format!("Failed to update the account {:?}, error: {:?}", bs58::encode(account.pubkey()).into_string(), err),
+                msg: format!("Failed to update the account {:?}, error: {:?}", bs58::encode(&account.pubkey).into_string(), err),
             });
         }
         measure.stop();
