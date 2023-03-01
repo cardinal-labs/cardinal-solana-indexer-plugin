@@ -78,4 +78,7 @@ jobs:
         run: ./ci/start_postgres.sh
 
       - name: Build
-        run: ./ci/cargo-build-test.sh
+        run: cargo build
+
+      - name: Test
+        run: cargo test -- --nocapture
