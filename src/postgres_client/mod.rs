@@ -1,16 +1,14 @@
-mod account_handler;
+mod accounts;
 mod block_handler;
 mod slot_handler;
-mod token_account_handler;
 mod transaction_handler;
-mod unknown_account_handler;
 
 use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
 use crate::parallel_client::ParallelClient;
+use crate::postgres_client::accounts::token_account_handler::TokenAccountHandler;
 use crate::postgres_client::block_handler::BlockHandler;
 use crate::postgres_client::slot_handler::SlotHandler;
-use crate::postgres_client::token_account_handler::TokenAccountHandler;
 use log::*;
 use openssl::ssl::SslConnector;
 use openssl::ssl::SslFiletype;
@@ -26,13 +24,14 @@ use std::collections::HashSet;
 use std::sync::Mutex;
 use std::thread;
 
-use self::account_handler::AccountHandler;
-pub use self::account_handler::DbAccountInfo;
+use self::accounts::account_handler::AccountHandler;
+pub use self::accounts::account_handler::DbAccountInfo;
+use self::accounts::metadata_creators_account_handler::MetadataCreatorsAccountHandler;
+use self::accounts::unknown_account_handler::UnknownAccountHandler;
 pub use self::block_handler::DbBlockInfo;
 pub use self::transaction_handler::build_db_transaction;
 pub use self::transaction_handler::DbTransaction;
 use self::transaction_handler::TransactionHandler;
-use self::unknown_account_handler::UnknownAccountHandler;
 
 pub struct SimplePostgresClient {
     batch_size: usize,
@@ -74,7 +73,7 @@ impl SimplePostgresClient {
             block_handler,
             transaction_handler,
             pending_account_updates: Vec::with_capacity(batch_size),
-            account_handlers: vec![Box::new(TokenAccountHandler {}), Box::new(UnknownAccountHandler {})],
+            account_handlers: vec![Box::new(TokenAccountHandler {}), Box::new(MetadataCreatorsAccountHandler {}), Box::new(UnknownAccountHandler {})],
             slots_at_startup: HashSet::default(),
         })
     }
