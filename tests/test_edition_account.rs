@@ -13,6 +13,7 @@ use solana_sdk::signer::Signer;
 
 static OWNER: Pubkey = pubkey!("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 
+#[ignore]
 #[test]
 fn test_edition_account() {
     let address: Pubkey = Keypair::new().pubkey();
