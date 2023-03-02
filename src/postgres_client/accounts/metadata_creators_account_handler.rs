@@ -59,6 +59,9 @@ impl AccountHandler for MetadataCreatorsAccountHandler {
         };
 
         let buf = &mut &account.data[TOKEN_METADATA_CREATORS_OFFSET..];
+        if buf[0] == 0 {
+            return "".to_string();
+        }
         let creators: Vec<Creator> = match BorshDeserialize::deserialize(buf) {
             Ok(c) => c,
             Err(e) => {
