@@ -27,7 +27,6 @@ use std::thread;
 use self::accounts::account_handler::AccountHandler;
 pub use self::accounts::account_handler::DbAccountInfo;
 use self::accounts::metadata_creators_account_handler::MetadataCreatorsAccountHandler;
-use self::accounts::unknown_account_handler::UnknownAccountHandler;
 pub use self::block_handler::DbBlockInfo;
 pub use self::transaction_handler::build_db_transaction;
 pub use self::transaction_handler::DbTransaction;
