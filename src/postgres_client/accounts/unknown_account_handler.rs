@@ -6,7 +6,7 @@ pub struct UnknownAccountHandler {}
 
 impl AccountHandler for UnknownAccountHandler {
     fn id(&self) -> String {
-        "account".to_string()
+        "unknown_handler".to_string()
     }
 
     fn init(&self, config: &crate::config::GeyserPluginPostgresConfig) -> String {

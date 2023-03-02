@@ -80,7 +80,7 @@ impl GeyserPlugin for GeyserPluginPostgres {
     }
 
     fn update_account(&mut self, account: ReplicaAccountInfoVersions, slot: u64, is_startup: bool) -> Result<()> {
-        info!("[update_account]");
+        debug!("[update_account]");
         // skip updating account on startup of batch_starting_slot is configured
         if is_startup && self.batch_starting_slot.map(|slot_limit| slot < slot_limit).unwrap_or(false) {
             return Ok(());
@@ -132,7 +132,7 @@ impl GeyserPlugin for GeyserPluginPostgres {
     }
 
     fn update_slot_status(&mut self, slot: u64, parent: Option<u64>, status: SlotStatus) -> Result<()> {
-        info!("[update_slot_status] slot=[{:?}] status=[{:?}]", slot, status);
+        debug!("[update_slot_status] slot=[{:?}] status=[{:?}]", slot, status);
         let client = match &mut self.client {
             Some(client) => client,
             None => return client_err(),
@@ -162,7 +162,7 @@ impl GeyserPlugin for GeyserPluginPostgres {
     }
 
     fn notify_transaction(&mut self, transaction_info: ReplicaTransactionInfoVersions, slot: u64) -> Result<()> {
-        info!("[notify_transaction]");
+        debug!("[notify_transaction]");
         let client = match &mut self.client {
             Some(client) => client,
             None => return client_err(),
@@ -192,7 +192,7 @@ impl GeyserPlugin for GeyserPluginPostgres {
     }
 
     fn notify_block_metadata(&mut self, block_info: ReplicaBlockInfoVersions) -> Result<()> {
-        info!("[notify_block_metadata]");
+        debug!("[notify_block_metadata]");
         let client = match &mut self.client {
             Some(client) => client,
             None => return client_err(),
