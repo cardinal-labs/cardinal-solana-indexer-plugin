@@ -9,7 +9,7 @@ use super::DbAccountInfo;
 
 pub static METADATA_PROGRAM_ID: Pubkey = pubkey!("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 const TOKEN_METADATA_MINT_OFFSET: usize = 33;
-const TOKEN_METADATA_CREATORS_OFFSET: usize = 326;
+const TOKEN_METADATA_CREATORS_OFFSET: usize = 322;
 const TOKEN_METADATA_DISCRIMINATOR: u8 = 4;
 
 #[repr(C)]
@@ -38,6 +38,8 @@ impl AccountHandler for MetadataCreatorsAccountHandler {
                 mint VARCHAR(44) NOT NULL,
                 creator VARCHAR(44) NOT NULL,
                 verified BOOL NOT NULL,
+                share SMALLINT NOT NULL,
+                position SMALLINT NOT NULL,
                 slot BIGINT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS token_metadata_creators_creator ON token_metadata_creators (creator);
@@ -61,11 +63,12 @@ impl AccountHandler for MetadataCreatorsAccountHandler {
         let slot = account.slot;
         return creators
             .iter()
-            .map(|c| {
+            .enumerate()
+            .map(|(index, c)| {
                 format!(
                     "
-                    INSERT INTO token_metadata_creators AS acc (mint, first_creator, verified, slot) \
-                    VALUES ('{0}', '{1}', '{2}', {3}) \
+                    INSERT INTO token_metadata_creators AS acc (mint, creator, verified, share, position, slot) \
+                    VALUES ('{0}', '{1}', {2}, {3}, {4}, {5}) \
                     ON CONFLICT (mint, creator) \
                     DO UPDATE SET slot=excluded.slot, verified=excluded.verified \
                     WHERE acc.slot < excluded.slot;
@@ -73,6 +76,8 @@ impl AccountHandler for MetadataCreatorsAccountHandler {
                     &bs58::encode(mint).into_string(),
                     &bs58::encode(c.address).into_string(),
                     &c.verified,
+                    &c.share,
+                    &index,
                     &slot,
                 )
             })

@@ -247,7 +247,7 @@ impl PostgresClientBuilder {
     pub fn build_pararallel_postgres_client(config: &GeyserPluginPostgresConfig) -> Result<(ParallelClient, Option<u64>), GeyserPluginError> {
         let mut client = SimplePostgresClient::connect_to_db(config)?;
 
-        let account_handlers: Vec<Box<dyn AccountHandler>> = vec![Box::new(TokenAccountHandler {}), Box::new(UnknownAccountHandler {})];
+        let account_handlers: Vec<Box<dyn AccountHandler>> = vec![Box::new(TokenAccountHandler {}), Box::new(MetadataCreatorsAccountHandler {}), Box::new(UnknownAccountHandler {})];
         let mut init_query = account_handlers.iter().map(|a| a.init(config)).collect::<Vec<String>>().join("");
         init_query.push_str(&SlotHandler::init(config));
         init_query.push_str(&BlockHandler::init(config));
