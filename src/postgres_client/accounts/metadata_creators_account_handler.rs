@@ -1,5 +1,6 @@
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
+use log::error;
 use solana_sdk::pubkey;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::pubkey::PUBKEY_BYTES;
@@ -58,7 +59,13 @@ impl AccountHandler for MetadataCreatorsAccountHandler {
         };
 
         let buf = &mut &account.data[TOKEN_METADATA_CREATORS_OFFSET..];
-        let creators: Vec<Creator> = BorshDeserialize::deserialize(buf).expect("Failed to deserialize creators");
+        let creators: Vec<Creator> = match BorshDeserialize::deserialize(buf) {
+            Ok(c) => c,
+            Err(e) => {
+                error!("[account_update] Failed to deserialize creators pubkey=[{:?}] error=[{:?}]", account.pubkey, e);
+                return "".to_string();
+            }
+        };
         let mint: &Pubkey = bytemuck::from_bytes(&account.data[TOKEN_METADATA_MINT_OFFSET..TOKEN_METADATA_MINT_OFFSET + PUBKEY_BYTES]);
         let slot = account.slot;
         return creators
