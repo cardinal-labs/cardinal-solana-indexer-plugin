@@ -26,11 +26,16 @@ borsh = "0.9.2"
 serde = "1.0.145"
 serde_derive = "1.0.145"
 serde_json = "1.0.85"
+anchor-lang = "0.26.0"
+anchor-syn = { version = "0.26.0", features = ["idl"] }
+futures = "0.3.26"
+flate2 = "1.0.19"
 solana-geyser-plugin-interface = { version = "=1.13.5" }
 solana-logger = { version = "=1.13.5" }
 solana-measure = { version = "=1.13.5" }
 solana-metrics = { version = "=1.13.5" }
 solana-runtime = { version = "=1.13.5" }
+solana-client = { version = "=1.13.5" }
 solana-sdk = { version = "=1.13.5" }
 solana-transaction-status = { version = "=1.13.5" }
 thiserror = "1.0.37"
