@@ -41,10 +41,9 @@ impl AccountHandler for MetadataCreatorsAccountHandler {
                 verified BOOL NOT NULL,
                 share SMALLINT NOT NULL,
                 position SMALLINT NOT NULL,
-                slot BIGINT NOT NULL
+                slot BIGINT NOT NULL,
+                PRIMARY KEY(creator, mint)
             );
-            CREATE INDEX IF NOT EXISTS token_metadata_creators_creator ON token_metadata_creators (creator);
-            CREATE UNIQUE INDEX IF NOT EXISTS token_metadata_creators_creator_mint ON token_metadata_creators (mint, creator);
         "
         .to_string();
     }
