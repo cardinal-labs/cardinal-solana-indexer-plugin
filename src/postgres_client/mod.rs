@@ -184,7 +184,7 @@ impl PostgresClient for SimplePostgresClient {
             return match client.batch_execute(&query) {
                 Ok(_) => Ok(()),
                 Err(err) => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
-                    msg: format!("[build_pararallel_postgres_client] error=[{}]", err,),
+                    msg: format!("[update_slot_status] error=[{}]", err,),
                 }))),
             };
         }
@@ -218,7 +218,7 @@ impl PostgresClient for SimplePostgresClient {
             .join("");
         if let Err(err) = client.batch_execute(&query) {
             return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
-                msg: format!("[build_pararallel_postgres_client] error=[{}]", err,),
+                msg: format!("[notify_end_of_startup] error=[{}]", err,),
             })));
         };
         measure.stop();
