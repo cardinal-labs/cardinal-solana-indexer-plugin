@@ -23,7 +23,7 @@ impl SlotHandler {
             "
                 INSERT INTO slot (slot, parent, status, updated_on) \
                 VALUES ({0}, {1}, '{2}', '{3}') \
-                ON CONFLICT (slot) DO UPDATE SET parent=excluded.parent, status=excluded.status, updated_on=excluded.updated_on
+                ON CONFLICT (slot) DO UPDATE SET parent=excluded.parent, status=excluded.status, updated_on=excluded.updated_on;
             ",
             &slot,
             parent.map_or("NULL".to_string(), |p| p.to_string()),

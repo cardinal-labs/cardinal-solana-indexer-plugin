@@ -432,7 +432,7 @@ impl TransactionHandler {
                 meta=excluded.meta, \
                 write_version=excluded.write_version, \
                 index=excluded.index,
-                updated_on=excluded.updated_on
+                updated_on=excluded.updated_on;
         ";
         match client.prepare(stmt) {
             Ok(statement) => Ok(TransactionHandler { upsert_statement: statement }),
