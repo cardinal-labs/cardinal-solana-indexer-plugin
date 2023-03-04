@@ -145,7 +145,7 @@ impl PostgresClient for SimplePostgresClient {
             self.slots_at_startup.insert(account.slot as u64);
             // flush if batch size
             if self.pending_account_updates.len() >= self.batch_size {
-                info!("[update_account_batch] flushing accounts length={}/{}", self.pending_account_updates.len(), self.batch_size);
+                info!("[update_account_batch][flushing_accounts] length={}/{}", self.pending_account_updates.len(), self.batch_size);
                 let query = self
                     .pending_account_updates
                     .drain(..)
@@ -195,6 +195,7 @@ impl PostgresClient for SimplePostgresClient {
     fn notify_end_of_startup(&mut self) -> Result<(), GeyserPluginError> {
         info!("[notify_end_of_startup]");
         // flush accounts
+        info!("[notify_end_of_startup][flushing_accounts] length={}/{}", self.pending_account_updates.len(), self.batch_size);
         let client = &mut self.client.get_mut().unwrap();
         let query = self
             .pending_account_updates
@@ -218,7 +219,7 @@ impl PostgresClient for SimplePostgresClient {
             .join("");
         if let Err(err) = client.batch_execute(&query) {
             return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
-                msg: format!("[notify_end_of_startup] error=[{}]", err),
+                msg: format!("[notify_end_of_startup][flush_slots] error=[{}]", err),
             })));
         };
         measure.stop();
