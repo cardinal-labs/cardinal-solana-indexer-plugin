@@ -211,17 +211,24 @@ impl PostgresClient for SimplePostgresClient {
 
         // flush slots
         let mut measure = Measure::start("geyser-plugin-postgres-flush-slots-us");
-        let query = &self
-            .slots_at_startup
-            .drain()
-            .map(|s| SlotHandler::update(s, None, SlotStatus::Rooted))
-            .collect::<Vec<String>>()
-            .join("");
-        if let Err(err) = client.batch_execute(&query) {
-            return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
-                msg: format!("[notify_end_of_startup][flush_slots] error=[{}]", err),
-            })));
-        };
+        for s in &self.slots_at_startup {
+            if let Err(err) = client.batch_execute(&SlotHandler::update(*s, None, SlotStatus::Rooted)) {
+                return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
+                    msg: format!("[notify_end_of_startup][flush_slots] error=[{}]", err),
+                })));
+            };
+        }
+        // let query = &self
+        //     .slots_at_startup
+        //     .drain()
+        //     .map(|s| SlotHandler::update(s, None, SlotStatus::Rooted))
+        //     .collect::<Vec<String>>()
+        //     .join("");
+        // if let Err(err) = client.batch_execute(&query) {
+        //     return Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
+        //         msg: format!("[notify_end_of_startup][flush_slots] error=[{}]", err),
+        //     })));
+        // };
         measure.stop();
 
         datapoint_info!(
