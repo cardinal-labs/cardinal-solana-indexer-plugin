@@ -134,7 +134,7 @@ impl SimplePostgresClient {
 
 impl PostgresClient for SimplePostgresClient {
     fn update_account(&mut self, account: DbAccountInfo, is_startup: bool) -> Result<(), GeyserPluginError> {
-        trace!(
+        info!(
             "[update_account] account=[{}] owner=[{}] slot=[{}]",
             bs58::encode(&account.pubkey).into_string(),
             bs58::encode(&account.owner).into_string(),
@@ -193,7 +193,6 @@ impl PostgresClient for SimplePostgresClient {
     }
 
     fn notify_end_of_startup(&mut self) -> Result<(), GeyserPluginError> {
-        info!("[notify_end_of_startup]");
         // flush accounts
         info!("[notify_end_of_startup][flushing_accounts] length={}/{}", self.pending_account_updates.len(), self.batch_size);
         let client = &mut self.client.get_mut().unwrap();
