@@ -134,7 +134,7 @@ impl SimplePostgresClient {
 
 impl PostgresClient for SimplePostgresClient {
     fn update_account(&mut self, account: DbAccountInfo, is_startup: bool) -> Result<(), GeyserPluginError> {
-        info!(
+        debug!(
             "[update_account] account=[{}] owner=[{}] slot=[{}]",
             bs58::encode(&account.pubkey).into_string(),
             bs58::encode(&account.owner).into_string(),

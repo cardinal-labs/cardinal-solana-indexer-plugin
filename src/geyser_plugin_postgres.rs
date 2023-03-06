@@ -104,7 +104,7 @@ impl GeyserPlugin for GeyserPluginPostgres {
                 measure_select.stop();
                 inc_new_counter_debug!("geyser-plugin-postgres-update-account-select-us", measure_select.as_us() as usize, 100000, 100000);
 
-                info!(
+                debug!(
                     "[update_account][ingest] pubkey=[{:?}] owner=[{:?}] slot=[{:?}]",
                     bs58::encode(account.pubkey).into_string(),
                     bs58::encode(account.owner).into_string(),
