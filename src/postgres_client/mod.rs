@@ -143,6 +143,7 @@ impl PostgresClient for SimplePostgresClient {
         let client = &mut self.client.get_mut().unwrap();
         if is_startup {
             self.slots_at_startup.insert(account.slot as u64);
+            self.pending_account_updates.push(account);
             // flush if batch size
             if self.pending_account_updates.len() >= self.batch_size {
                 info!("[update_account_batch][flushing_accounts] length={}/{}", self.pending_account_updates.len(), self.batch_size);
@@ -158,8 +159,6 @@ impl PostgresClient for SimplePostgresClient {
                         msg: format!("[update_account_batch] error=[{}]", err),
                     })));
                 };
-            } else {
-                self.pending_account_updates.push(account);
             }
             return Ok(());
         }
