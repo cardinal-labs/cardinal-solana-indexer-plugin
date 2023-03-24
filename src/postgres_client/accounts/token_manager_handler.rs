@@ -89,7 +89,7 @@ impl AccountHandler for TokenManagerAccountHandler {
         format!(
             "
             INSERT INTO token_manager AS acc (id, version, bump, count, num_invalidators, issuer, mint, amount, kind, state, state_changed_at, invalidation_type, recipient_token_account, receipt_mint, claim_approver, transfer_authority, invalidators, slot) \
-            VALUES ('{0}', {1}, {2}, {3}, {4}, '{5}', '{6}', {7}, {8}, {9}, {10}, {11}, '{12}', '{13}', '{14}', '{15}', '{16}', {17}) \
+            VALUES ('{0}', {1}, {2}, {3}, {4}, '{5}', '{6}', {7}, {8}, {9}, {10}, {11}, '{12}', {13}, {14}, {15}, '{16}', {17}) \
             ON CONFLICT (id) \
             DO UPDATE SET num_invalidators=excluded.num_invalidators, issuer=excluded.issuer, kind=excluded.kind, state=excluded.state, state_changed_at=excluded.state_changed_at, invalidation_type=excluded.invalidation_type, invalidators=excluded.invalidators \
             WHERE acc.slot < excluded.slot;
@@ -107,10 +107,10 @@ impl AccountHandler for TokenManagerAccountHandler {
             &token_manager.state_changed_at,
             &token_manager.invalidation_type,
             &token_manager.recipient_token_account.to_string(),
-            if token_manager.receipt_mint.is_none() {"NULL".to_string()} else {token_manager.receipt_mint.unwrap().to_string()},
-            if token_manager.claim_approver.is_none() {"NULL".to_string()} else {token_manager.claim_approver.unwrap().to_string()},
-            if token_manager.transfer_authority.is_none() {"NULL".to_string()} else {token_manager.transfer_authority.unwrap().to_string()},
-            format!("{{{0}}}", token_manager.invalidators.iter().map(|inv| {
+            token_manager.receipt_mint.map_or("NULL".to_string(), |rm| format!("'{}'", rm.to_string())),
+            token_manager.claim_approver.map_or("NULL".to_string(), |rm| format!("'{}'", rm.to_string())),
+            token_manager.transfer_authority.map_or("NULL".to_string(), |rm| format!("'{}'", rm.to_string())),
+            format!("{{{}}}", token_manager.invalidators.iter().map(|inv| {
                 inv.to_string()
             }).collect::<Vec<String>>()
             .join(",")),

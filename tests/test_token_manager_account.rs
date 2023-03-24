@@ -86,12 +86,12 @@ fn test_token_manager_account() {
     assert_eq!(invalidation_type, 4, "Incorrect invalidation_type");
     let recipient_token_account: String = token_manager.get("recipient_token_account");
     assert_eq!(recipient_token_account, "CV8t9uMQafrgvhJsDdsoNMqgM6sQfBeLrLmEbGWoW3Vs", "Incorrect recipient_token_account");
-    let receipt_mint: String = token_manager.get("receipt_mint");
-    assert_eq!(receipt_mint, "NULL", "Incorrect receipt_mint");
-    let claim_approver: String = token_manager.get("claim_approver");
-    assert_eq!(claim_approver, "NULL", "Incorrect claim_approver");
-    let transfer_authority: String = token_manager.get("transfer_authority");
-    assert_eq!(transfer_authority, "DxH9YVD9yafZ5vo8goKgxuMPR6zQtCC7uw3nnozArMcP", "Incorrect transfer_authority");
+    let receipt_mint: Option<String> = token_manager.get("receipt_mint");
+    assert_eq!(receipt_mint, None, "Incorrect receipt_mint");
+    let claim_approver: Option<String> = token_manager.get("claim_approver");
+    assert_eq!(claim_approver, None, "Incorrect claim_approver");
+    let transfer_authority: Option<String> = token_manager.get("transfer_authority");
+    assert_eq!(transfer_authority.unwrap(), "DxH9YVD9yafZ5vo8goKgxuMPR6zQtCC7uw3nnozArMcP", "Incorrect transfer_authority");
     let invalidators: Vec<String> = token_manager.get("invalidators");
     assert_eq!(invalidators, ["4WzjymAcLaGRSqEWqsfLYiL9BEZb7q1iJEDpzuTuiHhn"], "Incorrect invalidators");
 
