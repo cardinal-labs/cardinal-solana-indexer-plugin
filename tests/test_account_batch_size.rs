@@ -11,9 +11,8 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signer::Signer;
 
-static OWNER: Pubkey = pubkey!("mgr99QFMYByTqGPWmNqunV7vBLmWWXdSrHUfV8Jf3JM");
+static OWNER: Pubkey = pubkey!("EmdsWm9dJ1d6BgQzHDcMJkDvB5SVvpfrAtpiGMVW1gxx");
 
-#[ignore]
 #[test]
 fn test_account_batch_size() {
     let address_1: Pubkey = Keypair::new().pubkey();
@@ -30,7 +29,7 @@ fn test_account_batch_size() {
     ];
 
     let mut geyser_plugin = GeyserPluginPostgres::default();
-    geyser_plugin.on_load(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_config_single_threaded.json")).unwrap();
+    geyser_plugin.on_load(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_config_single_threaded_unknown.json")).unwrap();
     geyser_plugin
         .update_account(
             ReplicaAccountInfoVersions::V0_0_1(&ReplicaAccountInfo {
