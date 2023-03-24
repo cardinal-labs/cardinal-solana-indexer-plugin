@@ -9,12 +9,14 @@ use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfo;
 
 use super::metadata_creators_account_handler::MetadataCreatorsAccountHandler;
 use super::token_account_handler::TokenAccountHandler;
+use super::token_manager_handler::TokenManagerAccountHandler;
 use super::unknown_account_handler::UnknownAccountHandler;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum AccountHandlerId {
     TokenMetadataCreators,
     TokenAccount,
+    TokenManager,
     UnknownAccount,
 }
 
@@ -23,6 +25,7 @@ impl AccountHandlerId {
         match input {
             "token_metadata_creators" => Ok(AccountHandlerId::TokenMetadataCreators),
             "token_account" => Ok(AccountHandlerId::TokenAccount),
+            "token_manager" => Ok(AccountHandlerId::TokenManager),
             "unknown_account" => Ok(AccountHandlerId::UnknownAccount),
             _ => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
                 msg: format!("[AccountHandlerId] error=[Invalid account handler id]"),
@@ -35,6 +38,7 @@ pub fn all_account_handlers() -> HashMap<AccountHandlerId, Box<dyn AccountHandle
     let mut account_handlers: HashMap<AccountHandlerId, Box<dyn AccountHandler>> = HashMap::default();
     account_handlers.insert(AccountHandlerId::TokenAccount, Box::new(TokenAccountHandler {}));
     account_handlers.insert(AccountHandlerId::TokenMetadataCreators, Box::new(MetadataCreatorsAccountHandler {}));
+    account_handlers.insert(AccountHandlerId::TokenManager, Box::new(TokenManagerAccountHandler {}));
     account_handlers.insert(AccountHandlerId::UnknownAccount, Box::new(UnknownAccountHandler {}));
     return account_handlers;
 }
