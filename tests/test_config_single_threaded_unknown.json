@@ -17,6 +17,11 @@
                 {
                     "handler_id": "token_account"
                 }
+            ],
+            "EmdsWm9dJ1d6BgQzHDcMJkDvB5SVvpfrAtpiGMVW1gxx": [
+                {
+                    "handler_id": "unknown_account"
+                }
             ]
         }
     },

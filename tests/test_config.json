@@ -6,10 +6,23 @@
     "panic_on_db_errors": true,
     "index_token_owner": true,
     "index_token_mint": true,
-    "accounts_selector" : {
-        "accounts" : ["*"]
+    "accounts_selector": {
+        "owners": {
+            "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s": [
+                {
+                    "handler_id": "token_metadata_creators"
+                }
+            ],
+            "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA": [
+                {
+                    "handler_id": "token_account"
+                }
+            ]
+        }
     },
-    "transaction_selector" : {
-        "mentions" : ["*"]
+    "transaction_selector": {
+        "mentions": [
+            "*"
+        ]
     }
 }

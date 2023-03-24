@@ -3,10 +3,12 @@ mod block_handler;
 mod slot_handler;
 mod transaction_handler;
 
+use crate::accounts_selector::AccountsSelectorConfig;
 use crate::config::GeyserPluginPostgresConfig;
 use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
 use crate::parallel_client::ParallelClient;
-use crate::postgres_client::accounts::token_account_handler::TokenAccountHandler;
+use crate::postgres_client::accounts::account_handler::all_account_handlers;
+use crate::postgres_client::accounts::account_handler::select_account_handlers;
 use crate::postgres_client::block_handler::BlockHandler;
 use crate::postgres_client::slot_handler::SlotHandler;
 use log::*;
@@ -20,13 +22,14 @@ use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
 use solana_geyser_plugin_interface::geyser_plugin_interface::SlotStatus;
 use solana_measure::measure::Measure;
 use solana_metrics::*;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Mutex;
 use std::thread;
 
 use self::accounts::account_handler::AccountHandler;
+pub use self::accounts::account_handler::AccountHandlerId;
 pub use self::accounts::account_handler::DbAccountInfo;
-use self::accounts::metadata_creators_account_handler::MetadataCreatorsAccountHandler;
 pub use self::block_handler::DbBlockInfo;
 pub use self::transaction_handler::build_db_transaction;
 pub use self::transaction_handler::DbTransaction;
@@ -38,7 +41,8 @@ pub struct SimplePostgresClient {
     pending_account_updates: Vec<DbAccountInfo>,
     block_handler: BlockHandler,
     transaction_handler: TransactionHandler,
-    account_handlers: Vec<Box<dyn AccountHandler>>,
+    account_handlers: HashMap<AccountHandlerId, Box<dyn AccountHandler>>,
+    account_selector: Option<AccountsSelectorConfig>,
     client: Mutex<Client>,
 }
 
@@ -65,14 +69,14 @@ impl SimplePostgresClient {
         let block_handler = BlockHandler::new(&mut client, config)?;
         let transaction_handler = TransactionHandler::new(&mut client, config)?;
         let batch_size = config.batch_size;
-        info!("[SimplePostgresClient] created");
         Ok(Self {
             batch_size,
             client: Mutex::new(client),
             block_handler,
             transaction_handler,
             pending_account_updates: Vec::with_capacity(batch_size),
-            account_handlers: vec![Box::new(TokenAccountHandler {}), Box::new(MetadataCreatorsAccountHandler {})],
+            account_handlers: all_account_handlers(),
+            account_selector: config.accounts_selector.clone(),
             slots_at_startup: HashSet::default(),
         })
     }
@@ -134,12 +138,10 @@ impl SimplePostgresClient {
 
 impl PostgresClient for SimplePostgresClient {
     fn update_account(&mut self, account: DbAccountInfo, is_startup: bool) -> Result<(), GeyserPluginError> {
-        debug!(
-            "[update_account] account=[{}] owner=[{}] slot=[{}]",
-            bs58::encode(&account.pubkey).into_string(),
-            bs58::encode(&account.owner).into_string(),
-            account.slot,
-        );
+        let account_key = bs58::encode(&account.pubkey).into_string();
+        let owner_key = bs58::encode(&account.owner).into_string();
+        debug!("[update_account] account=[{}] owner=[{}] slot=[{}]", account_key, owner_key, account.slot,);
+
         let client = &mut self.client.get_mut().unwrap();
         if is_startup {
             self.slots_at_startup.insert(account.slot as u64);
@@ -150,7 +152,19 @@ impl PostgresClient for SimplePostgresClient {
                 let query = self
                     .pending_account_updates
                     .drain(..)
-                    .map(|a| self.account_handlers.iter().map(|h| h.account_update(&a)).collect::<Vec<String>>().join(""))
+                    .map(|a| {
+                        select_account_handlers(&self.account_selector, &a, true)
+                            .iter()
+                            // map feed through relevant handlers
+                            .map(|h| {
+                                self.account_handlers
+                                    .get(&AccountHandlerId::from_str(&h.handler_id).expect("Invalid account handler id"))
+                                    .expect("Invalid handler id")
+                                    .account_update(&a)
+                            })
+                            .collect::<Vec<String>>()
+                            .join("")
+                    })
                     .collect::<Vec<String>>()
                     .join("");
 
@@ -162,8 +176,16 @@ impl PostgresClient for SimplePostgresClient {
             }
             return Ok(());
         }
-
-        let query = self.account_handlers.iter().map(|h| h.account_update(&account)).collect::<Vec<String>>().join("");
+        let query = select_account_handlers(&self.account_selector, &account, false)
+            .iter()
+            .map(|h| {
+                self.account_handlers
+                    .get(&AccountHandlerId::from_str(&h.handler_id).expect("Invalid account handler id"))
+                    .expect("Invalid handler id")
+                    .account_update(&account)
+            })
+            .collect::<Vec<String>>()
+            .join("");
         if !query.is_empty() {
             return match client.batch_execute(&query) {
                 Ok(_) => Ok(()),
@@ -198,7 +220,19 @@ impl PostgresClient for SimplePostgresClient {
         let query = self
             .pending_account_updates
             .drain(..)
-            .map(|a| self.account_handlers.iter().map(|h| h.account_update(&a)).collect::<Vec<String>>().join(""))
+            .map(|a| {
+                select_account_handlers(&self.account_selector, &a, true)
+                    .iter()
+                    // map feed through relevant handlers
+                    .map(|h| {
+                        self.account_handlers
+                            .get(&AccountHandlerId::from_str(&h.handler_id).expect("Invalid account handler id"))
+                            .expect("Invalid handler id")
+                            .account_update(&a)
+                    })
+                    .collect::<Vec<String>>()
+                    .join("")
+            })
             .collect::<Vec<String>>()
             .join("");
         if let Err(err) = client.batch_execute(&query) {
@@ -207,7 +241,7 @@ impl PostgresClient for SimplePostgresClient {
             })));
         };
 
-        // flush slots
+        // flush slots sequentailly
         let mut measure = Measure::start("geyser-plugin-postgres-flush-slots-us");
         for s in &self.slots_at_startup {
             if let Err(err) = client.batch_execute(&SlotHandler::update(*s, None, SlotStatus::Rooted)) {
@@ -216,6 +250,7 @@ impl PostgresClient for SimplePostgresClient {
                 })));
             };
         }
+        // flush slots in batch (too large)
         // let query = &self
         //     .slots_at_startup
         //     .drain()
@@ -252,8 +287,8 @@ impl PostgresClientBuilder {
     pub fn build_pararallel_postgres_client(config: &GeyserPluginPostgresConfig) -> Result<(ParallelClient, Option<u64>), GeyserPluginError> {
         let mut client = SimplePostgresClient::connect_to_db(config)?;
 
-        let account_handlers: Vec<Box<dyn AccountHandler>> = vec![Box::new(TokenAccountHandler {}), Box::new(MetadataCreatorsAccountHandler {})];
-        let mut init_query = account_handlers.iter().map(|a| a.init(config)).collect::<Vec<String>>().join("");
+        let account_handlers = all_account_handlers();
+        let mut init_query = account_handlers.values().map(|a| a.init(config)).collect::<Vec<String>>().join("");
         init_query.push_str(&SlotHandler::init(config));
         init_query.push_str(&BlockHandler::init(config));
         init_query.push_str(&TransactionHandler::init(config));
