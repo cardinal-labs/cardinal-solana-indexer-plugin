@@ -2,13 +2,10 @@ use super::account_handler::AccountHandler;
 use super::DbAccountInfo;
 use chrono::Utc;
 
+#[derive(Clone, Copy)]
 pub struct UnknownAccountHandler {}
 
 impl AccountHandler for UnknownAccountHandler {
-    fn id(&self) -> String {
-        "unknown_handler".to_string()
-    }
-
     fn init(&self, config: &crate::config::GeyserPluginPostgresConfig) -> String {
         if !self.enabled(config) {
             return "".to_string();

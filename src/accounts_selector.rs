@@ -26,7 +26,7 @@ pub struct AccountsSelectorConfig {
 #[derive(Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AccountHandlerConfig {
     pub handler_id: String,
-    pub skip_on_startup: bool,
+    pub skip_on_startup: Option<bool>,
 }
 
 #[derive(Debug, Default)]

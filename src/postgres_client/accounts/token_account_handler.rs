@@ -25,13 +25,10 @@ const SPL_TOKEN_ACCOUNT_OWNER_OFFSET: usize = 32;
 const SPL_TOKEN_ACCOUNT_LENGTH: usize = 165;
 const SPL_TOKEN_ACCOUNT_DISCRIMINATOR: u8 = 2;
 
+#[derive(Clone, Copy)]
 pub struct TokenAccountHandler {}
 
 impl AccountHandler for TokenAccountHandler {
-    fn id(&self) -> String {
-        "spl_token_account".to_string()
-    }
-
     fn init(&self, config: &crate::config::GeyserPluginPostgresConfig) -> String {
         if !self.enabled(config) {
             return "".to_string();

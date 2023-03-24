@@ -22,8 +22,19 @@ fn test_metadata_batch_size() {
     let address_3: Pubkey = Keypair::new().pubkey();
     let mint_3 = "g8UZt9y4dxG6UgRbFsDWoe8SEAei6973E8yNFJUnxZ4".to_string();
 
+    // load plugin
     let mut geyser_plugin = GeyserPluginPostgres::default();
     geyser_plugin.on_load(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_config_single_threaded.json")).unwrap();
+
+    // clear these mints from tables
+    let mut client = SimplePostgresClient::connect_to_db(&geyser_plugin.config.clone().expect("No plugin config found")).expect("Failed to connect");
+    client
+        .query(
+            "DELETE from token_metadata_creators where mint = any(array[$1, $2, $3])",
+            &[&mint_1.to_string(), &mint_2.to_string(), &mint_3.to_string()],
+        )
+        .expect("Error deleting accounts");
+
     geyser_plugin
         .update_account(
             ReplicaAccountInfoVersions::V0_0_1(&ReplicaAccountInfo {
@@ -164,13 +175,13 @@ fn test_metadata_batch_size() {
             &[&mint_1.to_string(), &mint_2.to_string(), &mint_3.to_string()],
         )
         .expect("Error selecting accounts");
-    assert_eq!(rows.len(), 2, "Incorrect number of rows found");
+    assert_eq!(rows.len(), 6, "Incorrect number of rows found");
 
     let mut client = SimplePostgresClient::connect_to_db(&geyser_plugin.config.clone().expect("No plugin config found")).expect("Failed to connect");
     let rows = client
         .query("SELECT * from token_metadata_creators where mint = $1", &[&mint_1.to_string()])
         .expect("Error selecting accounts");
-    assert_eq!(rows.len(), 1, "Incorrect number of rows found");
+    assert_eq!(rows.len(), 3, "Incorrect number of rows found");
 
     client.close().expect("Error disconnecting");
     geyser_plugin.on_unload();

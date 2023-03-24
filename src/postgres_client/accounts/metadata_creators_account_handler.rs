@@ -23,13 +23,10 @@ pub struct Creator {
     pub share: u8,
 }
 
+#[derive(Clone, Copy)]
 pub struct MetadataCreatorsAccountHandler {}
 
 impl AccountHandler for MetadataCreatorsAccountHandler {
-    fn id(&self) -> String {
-        "token_metadata_creators".to_string()
-    }
-
     fn init(&self, config: &crate::config::GeyserPluginPostgresConfig) -> String {
         if !self.enabled(config) {
             return "".to_string();
