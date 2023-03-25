@@ -19,7 +19,7 @@ impl SlotHandler {
     }
 
     pub fn update(slot: u64, parent: Option<u64>, status: SlotStatus) -> String {
-        return format!(
+        format!(
             "
                 INSERT INTO slot (slot, parent, status, updated_on) \
                 VALUES ({0}, {1}, '{2}', '{3}') \
@@ -29,7 +29,7 @@ impl SlotHandler {
             parent.map_or("NULL".to_string(), |p| p.to_string()),
             &status.as_str(),
             &Utc::now().naive_utc()
-        );
+        )
     }
 
     pub fn get_highest_available_slot(client: &mut Client) -> Result<u64, GeyserPluginError> {

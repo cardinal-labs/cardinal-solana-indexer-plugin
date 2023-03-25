@@ -1,10 +1,10 @@
 use std::collections::HashMap;
+use std::str::FromStr;
+use std::string::ParseError;
 
 use crate::accounts_selector::AccountHandlerConfig;
 use crate::accounts_selector::AccountsSelectorConfig;
 use crate::config::GeyserPluginPostgresConfig;
-use crate::geyser_plugin_postgres::GeyserPluginPostgresError;
-use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
 use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfo;
 
 use super::metadata_creators_account_handler::MetadataCreatorsAccountHandler;
@@ -19,17 +19,19 @@ pub enum AccountHandlerId {
     TokenManager,
     UnknownAccount,
 }
+#[derive(Debug)]
+pub struct UnknownAccountHandlerId;
 
-impl AccountHandlerId {
-    pub fn from_str(input: &str) -> Result<AccountHandlerId, GeyserPluginError> {
+impl FromStr for AccountHandlerId {
+    type Err = UnknownAccountHandlerId;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
         match input {
-            "token_metadata_creators" => Ok(AccountHandlerId::TokenMetadataCreators),
-            "token_account" => Ok(AccountHandlerId::TokenAccount),
-            "token_manager" => Ok(AccountHandlerId::TokenManager),
-            "unknown_account" => Ok(AccountHandlerId::UnknownAccount),
-            _ => Err(GeyserPluginError::Custom(Box::new(GeyserPluginPostgresError::DataSchemaError {
-                msg: format!("[AccountHandlerId] error=[Invalid account handler id]"),
-            }))),
+            "token_metadata_creators" => Ok(Self::TokenMetadataCreators),
+            "token_account" => Ok(Self::TokenAccount),
+            "token_manager" => Ok(Self::TokenManager),
+            "unknown_account" => Ok(Self::UnknownAccount),
+            _ => Err(UnknownAccountHandlerId),
         }
     }
 }
@@ -40,7 +42,7 @@ pub fn all_account_handlers() -> HashMap<AccountHandlerId, Box<dyn AccountHandle
     account_handlers.insert(AccountHandlerId::TokenMetadataCreators, Box::new(MetadataCreatorsAccountHandler {}));
     account_handlers.insert(AccountHandlerId::TokenManager, Box::new(TokenManagerAccountHandler {}));
     account_handlers.insert(AccountHandlerId::UnknownAccount, Box::new(UnknownAccountHandler {}));
-    return account_handlers;
+    account_handlers
 }
 
 pub fn select_account_handlers(account_selector: &Option<AccountsSelectorConfig>, account: &DbAccountInfo, is_startup: bool) -> Vec<AccountHandlerConfig> {

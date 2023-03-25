@@ -60,7 +60,7 @@ impl AccountHandler for TokenAccountHandler {
         let owner: &Pubkey = bytemuck::from_bytes(&account.data[SPL_TOKEN_ACCOUNT_OWNER_OFFSET..SPL_TOKEN_ACCOUNT_OWNER_OFFSET + PUBKEY_BYTES]);
         let pubkey = Pubkey::new(&account.pubkey);
         let slot = account.slot;
-        return format!(
+        format!(
             "
                 INSERT INTO spl_token_account AS spl_token_entry (pubkey, owner, mint, slot) \
                 VALUES ('{0}', '{1}', '{2}', {3}) \
@@ -72,6 +72,6 @@ impl AccountHandler for TokenAccountHandler {
             &bs58::encode(owner).into_string(),
             &bs58::encode(mint).into_string(),
             &slot,
-        );
+        )
     }
 }
