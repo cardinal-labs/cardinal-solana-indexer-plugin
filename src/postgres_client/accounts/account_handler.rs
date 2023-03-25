@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::string::ParseError;
 
 use crate::accounts_selector::AccountHandlerConfig;
 use crate::accounts_selector::AccountsSelectorConfig;

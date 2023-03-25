@@ -1,0 +1,27 @@
+{
+    "libpath": "./target/debug/libsolana_geyser_plugin.dylib",
+    "connection_str": "host=localhost user=solana password=solana port=5432",
+    "threads": 1,
+    "batch_size": 10,
+    "panic_on_db_errors": true,
+    "index_token_owner": true,
+    "index_token_mint": true,
+    "accounts_selector": {
+        "owners": {
+            "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s": [
+                {
+                    "handler_id": "token_metadata_creators",
+                    "skip_on_startup": true
+                }
+            ],
+            "mgr99QFMYByTqGPWmNqunV7vBLmWWXdSrHUfV8Jf3JM": [
+                {
+                    "handler_id": "token_manager"
+                }
+            ]
+        }
+    },
+    "transaction_selector" : {
+        "mentions" : ["*"]
+    }
+}
