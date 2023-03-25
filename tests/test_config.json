@@ -17,6 +17,11 @@
                 {
                     "handler_id": "token_account"
                 }
+            ],
+            "mgr99QFMYByTqGPWmNqunV7vBLmWWXdSrHUfV8Jf3JM": [
+                {
+                    "handler_id": "token_manager"
+                }
             ]
         }
     },
