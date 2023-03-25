@@ -37,7 +37,7 @@ impl AccountHandler for UnknownAccountHandler {
         if !self.account_match(account) {
             return "".to_string();
         };
-        return format!(
+        format!(
             "
                 INSERT INTO account AS acct (pubkey, slot, owner, lamports, executable, rent_epoch, data, write_version, updated_on, txn_signature) \
                 VALUES ('\\x{0}', {1}, '\\x{2}', {3}, {4}, {5}, '\\x{6}', {7}, '{8}', {9}) \
@@ -58,6 +58,6 @@ impl AccountHandler for UnknownAccountHandler {
             &account.write_version,
             &Utc::now().naive_utc(),
             account.txn_signature.as_deref().map_or("NULL".to_string(), |tx| format!("'\\x{}'", hex::encode(tx))),
-        );
+        )
     }
 }
