@@ -92,7 +92,7 @@ impl GeyserPlugin for GeyserPluginPostgres {
 
         let mut measure_all = Measure::start("geyser-plugin-postgres-update-account-main");
         match account {
-            ReplicaAccountInfoVersions::V0_0_1(account) => {
+            ReplicaAccountInfoVersions::V0_0_2(account) => {
                 let mut measure_select = Measure::start("geyser-plugin-postgres-update-account-select");
                 if let Some(accounts_selector) = &self.accounts_selector {
                     if !accounts_selector.is_account_selected(account.pubkey, account.owner) {
@@ -121,6 +121,11 @@ impl GeyserPlugin for GeyserPluginPostgres {
                         msg: format!("Failed to persist the update of account to the PostgreSQL database. Error: {:?}", err),
                     });
                 }
+            }
+            _ => {
+                return Err(GeyserPluginError::AccountsUpdateError {
+                    msg: "Failed to update account. Unsupported format.".to_string(),
+                });
             }
         }
 
@@ -167,7 +172,7 @@ impl GeyserPlugin for GeyserPluginPostgres {
         };
 
         match transaction_info {
-            ReplicaTransactionInfoVersions::V0_0_1(transaction_info) => {
+            ReplicaTransactionInfoVersions::V0_0_2(transaction_info) => {
                 if let Some(transaction_selector) = &self.transaction_selector {
                     if !transaction_selector.is_transaction_selected(transaction_info.is_vote, Box::new(transaction_info.transaction.message().account_keys().iter())) {
                         return Ok(());
@@ -183,6 +188,11 @@ impl GeyserPlugin for GeyserPluginPostgres {
                         msg: format!("Failed to persist the transaction info to the PostgreSQL database. Error: {:?}", err),
                     });
                 }
+            }
+            _ => {
+                return Err(GeyserPluginError::SlotStatusUpdateError {
+                    msg: "Failed to persist the transaction info to the PostgreSQL database. Unsupported format.".to_string(),
+                });
             }
         }
 

@@ -7,7 +7,7 @@ use postgres::Statement;
 use postgres_types::FromSql;
 use postgres_types::ToSql;
 use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
-use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaTransactionInfo;
+use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaTransactionInfoV2;
 use solana_runtime::bank::RewardType;
 use solana_sdk::instruction::CompiledInstruction;
 use solana_sdk::message::v0::LoadedAddresses;
@@ -387,7 +387,7 @@ impl From<&TransactionStatusMeta> for DbTransactionStatusMeta {
     }
 }
 
-pub fn build_db_transaction(slot: u64, transaction_info: &ReplicaTransactionInfo, transaction_write_version: u64) -> DbTransaction {
+pub fn build_db_transaction(slot: u64, transaction_info: &ReplicaTransactionInfoV2, transaction_write_version: u64) -> DbTransaction {
     DbTransaction {
         signature: transaction_info.signature.as_ref().to_vec(),
         is_vote: transaction_info.is_vote,
@@ -397,7 +397,7 @@ pub fn build_db_transaction(slot: u64, transaction_info: &ReplicaTransactionInfo
             SanitizedMessage::V0(_) => 1,
         },
         legacy_message: match transaction_info.transaction.message() {
-            SanitizedMessage::Legacy(legacy_message) => Some(DbTransactionMessage::from(legacy_message)),
+            SanitizedMessage::Legacy(legacy_message) => Some(DbTransactionMessage::from(legacy_message.message.as_ref())),
             _ => None,
         },
         v0_loaded_message: match transaction_info.transaction.message() {
@@ -979,6 +979,8 @@ pub(crate) mod tests {
                 writable: vec![Pubkey::new_unique(), Pubkey::new_unique()],
                 readonly: vec![Pubkey::new_unique(), Pubkey::new_unique()],
             },
+            return_data: None,
+            compute_units_consumed: None,
         }
     }
 
@@ -1142,14 +1144,14 @@ pub(crate) mod tests {
         check_loaded_message_v0_equality(&message, &db_message);
     }
 
-    fn check_transaction(slot: u64, transaction: &ReplicaTransactionInfo, db_transaction: &DbTransaction) {
+    fn check_transaction(slot: u64, transaction: &ReplicaTransactionInfoV2, db_transaction: &DbTransaction) {
         assert_eq!(transaction.signature.as_ref(), db_transaction.signature);
         assert_eq!(transaction.is_vote, db_transaction.is_vote);
         assert_eq!(slot, db_transaction.slot as u64);
         match transaction.transaction.message() {
             SanitizedMessage::Legacy(message) => {
                 assert_eq!(db_transaction.message_type, 0);
-                check_transaction_message_equality(message, db_transaction.legacy_message.as_ref().unwrap());
+                check_transaction_message_equality(message.message.as_ref(), db_transaction.legacy_message.as_ref().unwrap());
             }
             SanitizedMessage::V0(message) => {
                 assert_eq!(db_transaction.message_type, 1);
@@ -1187,7 +1189,8 @@ pub(crate) mod tests {
         let transaction = SanitizedTransaction::try_create(transaction, message_hash, Some(true), SimpleAddressLoader::Disabled, false).unwrap();
 
         let transaction_status_meta = build_transaction_status_meta();
-        let transaction_info = ReplicaTransactionInfo {
+        let transaction_info = ReplicaTransactionInfoV2 {
+            index: 0,
             signature: &signature,
             is_vote: false,
             transaction: &transaction,
@@ -1228,7 +1231,8 @@ pub(crate) mod tests {
         .unwrap();
 
         let transaction_status_meta = build_transaction_status_meta();
-        let transaction_info = ReplicaTransactionInfo {
+        let transaction_info = ReplicaTransactionInfoV2 {
+            index: 0,
             signature: &signature,
             is_vote: true,
             transaction: &transaction,

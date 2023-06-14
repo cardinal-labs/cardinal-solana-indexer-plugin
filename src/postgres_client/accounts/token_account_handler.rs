@@ -58,7 +58,8 @@ impl AccountHandler for TokenAccountHandler {
         };
         let mint: &Pubkey = bytemuck::from_bytes(&account.data[SPL_TOKEN_ACCOUNT_MINT_OFFSET..SPL_TOKEN_ACCOUNT_MINT_OFFSET + PUBKEY_BYTES]);
         let owner: &Pubkey = bytemuck::from_bytes(&account.data[SPL_TOKEN_ACCOUNT_OWNER_OFFSET..SPL_TOKEN_ACCOUNT_OWNER_OFFSET + PUBKEY_BYTES]);
-        let pubkey = Pubkey::new(&account.pubkey);
+        let pubkey_bytes: [u8; 32] = account.pubkey[..].try_into().unwrap();
+        let pubkey = Pubkey::from(pubkey_bytes);
         let slot = account.slot;
         format!(
             "
