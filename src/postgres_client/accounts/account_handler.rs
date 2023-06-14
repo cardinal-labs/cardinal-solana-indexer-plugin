@@ -4,7 +4,7 @@ use std::str::FromStr;
 use crate::accounts_selector::AccountHandlerConfig;
 use crate::accounts_selector::AccountsSelectorConfig;
 use crate::config::GeyserPluginPostgresConfig;
-use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfo;
+use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfoV2;
 
 use super::metadata_creators_account_handler::MetadataCreatorsAccountHandler;
 use super::token_account_handler::TokenAccountHandler;
@@ -92,7 +92,7 @@ pub struct DbAccountInfo {
 }
 
 impl DbAccountInfo {
-    pub fn new(account: &ReplicaAccountInfo, slot: u64) -> DbAccountInfo {
+    pub fn new(account: &ReplicaAccountInfoV2, slot: u64) -> DbAccountInfo {
         let data = account.data.to_vec();
         Self {
             pubkey: account.pubkey.to_vec(),

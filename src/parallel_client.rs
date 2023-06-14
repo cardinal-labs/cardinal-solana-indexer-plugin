@@ -13,9 +13,9 @@ use crossbeam_channel::bounded;
 use crossbeam_channel::Sender;
 use log::*;
 use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
-use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfo;
+use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfoV2;
 use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaBlockInfo;
-use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaTransactionInfo;
+use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaTransactionInfoV2;
 use solana_geyser_plugin_interface::geyser_plugin_interface::SlotStatus;
 use solana_measure::measure::Measure;
 use solana_metrics::*;
@@ -115,7 +115,7 @@ impl ParallelClient {
         Ok(())
     }
 
-    pub fn update_account(&mut self, account: &ReplicaAccountInfo, slot: u64, is_startup: bool) -> Result<(), GeyserPluginError> {
+    pub fn update_account(&mut self, account: &ReplicaAccountInfoV2, slot: u64, is_startup: bool) -> Result<(), GeyserPluginError> {
         if self.last_report.should_update(30000) {
             datapoint_debug!("postgres-plugin-stats", ("message-queue-length", self.sender.len() as i64, i64),);
         }
@@ -178,7 +178,7 @@ impl ParallelClient {
         Ok(())
     }
 
-    pub fn log_transaction_info(&mut self, transaction_info: &ReplicaTransactionInfo, slot: u64) -> Result<(), GeyserPluginError> {
+    pub fn log_transaction_info(&mut self, transaction_info: &ReplicaTransactionInfoV2, slot: u64) -> Result<(), GeyserPluginError> {
         self.transaction_write_version.fetch_add(1, Ordering::Relaxed);
         let wrk_item = WorkRequest::LogTransaction(Box::new(LogTransactionRequest {
             transaction_info: build_db_transaction(slot, transaction_info, self.transaction_write_version.load(Ordering::Relaxed)),
