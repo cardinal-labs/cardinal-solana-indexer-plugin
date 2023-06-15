@@ -1,5 +1,5 @@
 use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPlugin;
-use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfo;
+use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfoV2;
 use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfoVersions;
 use solana_geyser_plugin_postgres::geyser_plugin_postgres::GeyserPluginPostgres;
 use solana_geyser_plugin_postgres::postgres_client::SimplePostgresClient;
@@ -19,7 +19,7 @@ fn test_token_manager_account() {
 
     geyser_plugin
         .update_account(
-            ReplicaAccountInfoVersions::V0_0_1(&ReplicaAccountInfo {
+            ReplicaAccountInfoVersions::V0_0_2(&ReplicaAccountInfoV2 {
                 pubkey: TOKEN_MANAGER_ADDRESS.as_ref(),
                 lamports: 2790960,
                 owner: OWNER.as_ref(),
@@ -38,6 +38,7 @@ fn test_token_manager_account() {
                     0x00, 0x00, 0x00,
                 ],
                 write_version: 0,
+                txn_signature: None,
             }),
             0,
             false,

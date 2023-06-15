@@ -2,7 +2,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPlugin;
-use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfo;
+use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfoV2;
 use solana_geyser_plugin_interface::geyser_plugin_interface::ReplicaAccountInfoVersions;
 use solana_geyser_plugin_postgres::geyser_plugin_postgres::GeyserPluginPostgres;
 use solana_geyser_plugin_postgres::postgres_client::SimplePostgresClient;
@@ -32,7 +32,7 @@ fn test_account_batch_size() {
     geyser_plugin.on_load(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/test_config_single_threaded_unknown.json")).unwrap();
     geyser_plugin
         .update_account(
-            ReplicaAccountInfoVersions::V0_0_1(&ReplicaAccountInfo {
+            ReplicaAccountInfoVersions::V0_0_2(&ReplicaAccountInfoV2 {
                 pubkey: address_1.as_ref(),
                 lamports: 2790960,
                 owner: OWNER.as_ref(),
@@ -40,6 +40,7 @@ fn test_account_batch_size() {
                 rent_epoch: 0,
                 data,
                 write_version: 0,
+                txn_signature: None,
             }),
             0,
             true,
@@ -55,7 +56,7 @@ fn test_account_batch_size() {
     let address_2: Pubkey = Keypair::new().pubkey();
     geyser_plugin
         .update_account(
-            ReplicaAccountInfoVersions::V0_0_1(&ReplicaAccountInfo {
+            ReplicaAccountInfoVersions::V0_0_2(&ReplicaAccountInfoV2 {
                 pubkey: address_2.as_ref(),
                 lamports: 2790960,
                 owner: OWNER.as_ref(),
@@ -63,6 +64,7 @@ fn test_account_batch_size() {
                 rent_epoch: 0,
                 data,
                 write_version: 0,
+                txn_signature: None,
             }),
             0,
             true,
@@ -72,7 +74,7 @@ fn test_account_batch_size() {
     let address_3: Pubkey = Keypair::new().pubkey();
     geyser_plugin
         .update_account(
-            ReplicaAccountInfoVersions::V0_0_1(&ReplicaAccountInfo {
+            ReplicaAccountInfoVersions::V0_0_2(&ReplicaAccountInfoV2 {
                 pubkey: address_3.as_ref(),
                 lamports: 2790960,
                 owner: OWNER.as_ref(),
@@ -80,6 +82,7 @@ fn test_account_batch_size() {
                 rent_epoch: 0,
                 data,
                 write_version: 0,
+                txn_signature: None,
             }),
             0,
             true,
